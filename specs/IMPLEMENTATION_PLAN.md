@@ -47,7 +47,7 @@ Review points (phase checkpoints) after T06, T13, T24, T34, T38, T41 and T44. In
 ## Phase A: Foundation
 
 ### T01. Monorepo scaffold and quality gates
-- [ ] Done
+- [x] Done
 - **Depends on:** none
 - **Covers:** NFR-MAINT-1, NFR-MAINT-2 (config only), NFR-SEC-4 (lockfile)
 - **Spec:** ARCHITECTURE sections 4 and 14; TESTING sections 1, 7, 8
@@ -55,7 +55,7 @@ Review points (phase checkpoints) after T06, T13, T24, T34, T38, T41 and T44. In
 - **Build:** first, an environment check (Node 22, pnpm, Git, Docker Desktop, available RAM; report what is missing and ask before installing). Then `docs/GLOSSARY.md` as an empty template. Then repository hygiene so that two Windows machines (the owner's laptop and desktop PC, sharing code through GitHub) behave the same: pin Node and pnpm versions (`engines`, `packageManager`, `.nvmrc`), a `.gitattributes` that forces LF line endings, a `.gitignore` covering `node_modules`, build output and every `.env` file, a committed `pnpm-lock.yaml`, and `.env.example` as the only committed environment file. Local-only files (`CLAUDE.local.md` and the `.private/` folder) are listed in `.gitignore`; if a `.gitignore` already exists in the folder, extend it rather than replacing it. Then a pnpm workspace with `apps/server`, `apps/mock-rail`, `apps/web`, `packages/shared`, `core`, `llm`, `evals`; TypeScript strict base config; ESLint and Prettier; Vitest with coverage thresholds configured per module (90% branch on money, idempotency, policy, ledger and audit paths, enforced once those modules exist); dependency-cruiser rules from ARCHITECTURE section 4 (including no cycles); root scripts named exactly as in TESTING section 8, each exiting non-zero when its suite is empty-but-required later (placeholders allowed only for suites not yet built, listed in the report).
 - **Done when:** `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm arch`, `pnpm test:unit` run and pass; the deliberate boundary violation fails `arch` as expected.
 - **Verify:** the commands above.
-- **Evidence:**
+- **Evidence:** All five ran and passed on 2026-10-14 (Node 22.13.0, pnpm 10.17.1, Windows 11): `pnpm install --frozen-lockfile` (up to date, no warnings); `pnpm lint` (ESLint 0 problems, Prettier clean); `pnpm typecheck` (7 packages, all done); `pnpm arch` (15 modules, 14 deps, 0 violations); `pnpm test:unit` (9/9 tests, including the arch- and lint-violation fixture proofs). `docker compose config` and `docker compose up` not run — Docker daemon not started this session (no compose file exists yet; that is T06). 14 of the 28 root scripts are placeholders (test:int, test:contract, test:reliability, test:security, test:e2e, eval:nlu, eval:workflow, eval:check, eval:compare, spec:check, db:migrate, db:seed, infra:test:up, loadtest, build) that exit 1 with the task that will build them; `pnpm verify` therefore currently fails at `spec:check`, as intended.
 
 ### T02. Shared contracts package
 - [ ] Done
