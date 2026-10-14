@@ -1,0 +1,22 @@
+# dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+*.log
+
+# environment files: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# local-only files (never committed)
+CLAUDE.local.md
+.private/
+.claude/settings.local.json
+
+# OS and editor noise
+.DS_Store
+Thumbs.db

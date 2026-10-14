@@ -1,0 +1,8 @@
+node_modules
+**/dist
+**/coverage
+pnpm-lock.yaml
+specs/**
+CLAUDE.md
+CLAUDE.local.md
+.private/**

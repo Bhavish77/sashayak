@@ -1,0 +1,53 @@
+{
+  "name": "sahayak",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <23.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "arch": "depcruise --config .dependency-cruiser.cjs apps packages",
+    "test:unit": "vitest run",
+    "test:int": "node tools/scripts/not-built.mjs test:int \"Needs real Postgres and Redis; lands in T04 (database) and T09 (Redis adapters). Start infra with 'pnpm infra:test:up' once it exists.\"",
+    "test:contract": "node tools/scripts/not-built.mjs test:contract \"Needs the OpenAPI/server and mock-rail contract suites; lands in T05 and T21.\"",
+    "test:reliability": "node tools/scripts/not-built.mjs test:reliability \"Needs the transfer lifecycle and worker; lands starting T20, completed T24.\"",
+    "test:security": "node tools/scripts/not-built.mjs test:security \"Needs auth, policy and the injection corpus; lands starting T10, completed T34.\"",
+    "test:e2e": "node tools/scripts/not-built.mjs test:e2e \"Needs the web app and Playwright setup; lands in T35.\"",
+    "eval:nlu": "node tools/scripts/not-built.mjs eval:nlu \"Needs the dataset and NLU evaluator; lands in T39-T40.\"",
+    "eval:workflow": "node tools/scripts/not-built.mjs eval:workflow \"Needs the workflow evaluator; lands in T41.\"",
+    "eval:check": "node tools/scripts/not-built.mjs eval:check \"Needs the dataset validator; lands in T39.\"",
+    "eval:compare": "node tools/scripts/not-built.mjs eval:compare \"Needs stored evaluation runs; lands in T40.\"",
+    "spec:check": "node tools/scripts/not-built.mjs spec:check \"Placeholder per specs/IMPLEMENTATION_PLAN.md requirement-coverage rule; the full PRD/plan traceability check is completed in T44.\"",
+    "db:migrate": "node tools/scripts/not-built.mjs db:migrate \"Needs migrations and roles; lands in T04.\"",
+    "db:seed": "node tools/scripts/not-built.mjs db:seed \"Needs migrations and seed data; lands in T04.\"",
+    "infra:test:up": "node tools/scripts/not-built.mjs infra:test:up \"Needs the database/Redis test harness; lands in T04/T09.\"",
+    "loadtest": "node tools/scripts/not-built.mjs loadtest \"Needs k6 scripts against real endpoints; lands in T43.\"",
+    "build": "node tools/scripts/not-built.mjs build \"Nothing ships yet; a real build target lands as apps gain entrypoints, completed in T44.\"",
+    "verify": "pnpm lint && pnpm typecheck && pnpm arch && pnpm spec:check && pnpm eval:check && pnpm test:unit && pnpm test:int && pnpm test:contract && pnpm test:reliability && pnpm test:security && pnpm eval:workflow && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.10.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "dependency-cruiser": "^16.8.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "execa": "^9.5.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.4.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.17.0",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
