@@ -1,6 +1,6 @@
 # ADR-009: Hash-chained, insert-only audit log
 
-Status: Proposed (2026-10-14).
+Status: Proposed (2026-10-14). Amended 2026-10-15 by ADR-019: entries now arrive as events from all services instead of being written in the action's own transaction; the chain, verification and anchors are unchanged.
 
 ## Context
 
@@ -8,7 +8,7 @@ Operators and auditors need to know who did what. Silent edits to history, by a 
 
 ## Decision
 
-`audit_log` is insert-only for the application role (no UPDATE, DELETE, TRUNCATE; triggers also block them). Each row stores `prev_hash` and `hash = sha256(prev_hash || canonical_json(row))`. Inserts take an advisory lock so the chain has one order and happen in the same transaction as the action. A verifier walks ranges and reports the first bad id; it runs hourly and on demand. The worker writes the latest hash as an external anchor line hourly and at shutdown.
+`audit_log` is insert-only for the application role (no UPDATE, DELETE, TRUNCATE; triggers also block them). Each row stores `prev_hash` and `hash = sha256(prev_hash || canonical_json(row))`. Inserts take an advisory lock so the chain has one order; the `audit` service performs them as it ingests events, while each producer records its event in the same transaction as the action (ADR-019). A verifier walks ranges and reports the first bad id; it runs hourly and on demand. The worker writes the latest hash as an external anchor line hourly and at shutdown.
 
 ## Alternatives considered
 

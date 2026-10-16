@@ -1,6 +1,6 @@
 # ADR-002: Node.js, TypeScript, Fastify, Zod and a pnpm monorepo with enforced boundaries
 
-Status: Proposed (2026-10-14).
+Status: Proposed (2026-10-14). Amended 2026-10-15 for the service split (ADR-015): workspace layout and boundary rules below.
 
 ## Context
 
@@ -11,8 +11,8 @@ The team wants one language across the API, worker and web client, and the owner
 - Node.js 22 LTS and TypeScript in strict mode everywhere, including the web app.
 - Fastify with a Zod type provider for routing and validation; the same Zod schemas in `packages/shared` define request and response types, the interpretation schema and the OpenAPI document.
 - Kysely over `pg` for typed SQL; plain SQL migrations.
-- pnpm workspaces: `apps/server`, `apps/mock-rail`, `apps/web`, `packages/shared`, `core`, `llm`, `evals`.
-- dependency-cruiser rules: `core` and `shared` import nothing from apps; `llm` depends on `shared` only; apps import packages, never each other; no cycles. CI fails on violations.
+- pnpm workspaces: apps `edge`, `assistant`, `wallet`, `transfers`, `audit`, `mock-rail`, `web`; packages `shared` (contracts and pure utilities), `platform` (infrastructure kit: service skeleton, config, logging, database, Redis, messaging, breakers, service security; no business logic), `assistant-core` (pure assistant domain logic, also used by the evaluation CLI), `llm` (model gateway), `evals`.
+- dependency-cruiser rules: `shared` imports nothing internal; `platform` and `assistant-core` import `shared` only; `llm` imports `shared` and `platform`; apps import packages, **never each other**; packages never import apps; no cycles. CI fails on violations.
 - Business logic depends on ports (interfaces) and receives adapters by injection, so Fastify is replaceable.
 
 ## Alternatives considered
@@ -29,4 +29,4 @@ One language and one schema source across API, worker, UI and evals. Slightly mo
 
 ## Revisit when
 
-A team standard conflicts (for example NestJS is mandated); only the adapter layer in `apps/server` changes.
+A team standard conflicts (for example NestJS is mandated); only each service's adapter layer and the `platform` service skeleton change.

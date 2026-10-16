@@ -1,6 +1,6 @@
 # Data Model
 
-Status: DRAFT for approval. Postgres 16 is the system of record (ARCHITECTURE section 7). Migrations are versioned SQL run by a Kysely migrator (FR-OPS-6).
+Status: DRAFT for approval. Revised 2026-10-15: one Postgres 16 server with **five databases**, one per service (ARCHITECTURE sections 3 and 7, ADR-015). Each service's database is the system of record for that service's data. Migrations are versioned SQL files per service, run by that service's migrator (FR-OPS-6). There are no foreign keys between databases; cross-service references are plain ids and denormalized snapshots.
 
 ## Conventions
 
@@ -10,80 +10,93 @@ Status: DRAFT for approval. Postgres 16 is the system of record (ARCHITECTURE se
 - Enums are Postgres enum types or text with check constraints (implementer's choice, but values below are fixed).
 - Personal data is stored only as needed. Account references are stored as masked display strings plus an opaque rail token, never full numbers.
 - Append-only tables (`ledger_entries`, `transfer_events`, `audit_log`, `llm_calls`): the application role has INSERT and SELECT only.
+- Cross-service ids: `user_id` values come from `edge_db.users.id`; `transfer_id` values come from `transfers_db.transfers.id`. Other services store them as plain `uuid` columns without foreign keys, and treat them as opaque.
+- Every service has an `event_outbox` table; services that consume events also have an `inbox` table (shapes below under "Messaging tables").
 
-## Database roles
+## Database roles (per database)
 
 | Role | Rights |
 |---|---|
-| `sahayak_migrator` | DDL; used only to run migrations. |
-| `sahayak_app` | CRUD on mutable tables; INSERT and SELECT only on append-only tables; no TRUNCATE, no DDL. |
-| `sahayak_readonly` | SELECT for dashboards and eval reporting. |
+| `<service>_migrator` | DDL on its own database; used only to run migrations. |
+| `<service>_app` | CRUD on mutable tables; INSERT and SELECT only on append-only tables; no TRUNCATE, no DDL; **can connect only to its own database** (CONNECT revoked from PUBLIC; granted per database). |
+| `<service>_readonly` | SELECT for dashboards and reporting in that database. |
+| `sahayak_sweep` (test and local only) | SELECT on `wallet_db` and `transfers_db`, and on the `event_outbox` tables of `edge_db` and `assistant_db` and on `audit_log` in `audit_db`, for the consistency sweep and the audit completeness check. Never configured in any service. |
 
-## Entities
+`infra/db/init` creates the five databases and the roles. A test proves each service's application credentials are rejected when connecting to any other service's database (NFR-ARCH-1).
 
-### Identity
+## `edge_db` (service `edge`)
 
 | Table | Columns | Constraints and notes |
 |---|---|---|
 | `users` | `id`, `email` (citext), `password_hash`, `role` (customer, support, admin), `display_name`, `preferred_locale` (en, hi, hi-Latn, null), `pin_hash` (null), `pin_failed_count` int default 0, `pin_locked_until` (null), `status` (active, disabled), `created_at` | `email` unique. PIN only for customers. |
 | `refresh_tokens` | `id`, `user_id`, `family_id`, `token_hash`, `expires_at`, `revoked_at`, `replaced_by`, `created_at` | `token_hash` unique. Reuse of a revoked token revokes the whole `family_id`. |
+| `event_outbox` | see Messaging tables | Auth and PIN audit events. |
 
-### Wallet and money
-
-| Table | Columns | Constraints and notes |
-|---|---|---|
-| `wallets` | `id`, `user_id`, `currency`, `available_minor`, `held_minor`, `version` int, `created_at` | `user_id` unique; checks `available_minor >= 0`, `held_minor >= 0`. Updated only inside transfer or credit transactions. |
-| `beneficiaries` | `id`, `user_id`, `display_name`, `aliases` text[], `account_masked`, `rail_token`, `created_at` | Duplicate display names allowed on purpose (ambiguity tests). `aliases` hold Latin and Devanagari spellings. |
-| `transfers` | `id`, `reference`, `user_id`, `wallet_id`, `beneficiary_id`, `amount_minor`, `fee_minor`, `currency`, `status`, `snapshot` jsonb, `snapshot_hash`, `requires_pin` bool, `expires_at`, `confirmed_at`, `submitted_at`, `completed_at`, `rail_reference`, `rail_attempts` int, `failure_code`, `created_at`, `updated_at`, `version` | `reference` unique, 10-character Crockford base32 shown to users (for example `TXN-7K3QH2M9XA`). `amount_minor > 0`. `status` values: PREPARED, CONFIRMED, SUBMITTED, COMPLETED, FAILED, PENDING_UNKNOWN, NEEDS_REVIEW, CANCELLED, EXPIRED. `rail_reference` equals the transfer id and is the idempotency key sent to the rail. `snapshot` is immutable after creation (enforced by trigger or application check plus test). |
-| `transfer_events` | `id`, `transfer_id`, `from_status`, `to_status`, `reason`, `actor_type` (user, system, admin), `actor_id`, `request_id`, `created_at` | Append-only. Every status change writes one row in the same transaction. |
-| `ledger_entries` | `id`, `wallet_id`, `transfer_id` (null for credits), `kind` (CREDIT, HOLD, SETTLE, RELEASE), `amount_minor`, `description`, `created_at` | Append-only; `amount_minor > 0`. Invariants in ARCHITECTURE section 6. A SETTLE or RELEASE must reference a transfer that has a prior HOLD. |
-| `v_transactions` (view) | unified rows: `id`, `wallet_id`, `type` (CREDIT or DEBIT), `amount_minor`, `counterparty`, `status`, `reference`, `occurred_at` | CREDIT rows come from `ledger_entries` kind CREDIT; DEBIT rows from `transfers` in non-PREPARED, non-expired states. Serves history and status queries. |
-
-### Reliability
+## `wallet_db` (service `wallet`)
 
 | Table | Columns | Constraints and notes |
 |---|---|---|
+| `wallets` | `id`, `user_id`, `currency`, `available_minor`, `held_minor`, `version` int, `created_at` | `user_id` unique; checks `available_minor >= 0`, `held_minor >= 0`. Updated only inside credit, hold, settle and release command transactions. |
+| `beneficiaries` | `id`, `user_id`, `display_name`, `aliases` text[], `account_masked`, `rail_token`, `created_at` | Duplicate display names allowed on purpose (ambiguity tests). `aliases` hold Latin and Devanagari spellings. `rail_token` is returned only on the internal lookup route. |
+| `holds` | `transfer_id` (primary key), `wallet_id`, `user_id`, `amount_minor`, `state` (HELD, SETTLED, RELEASED, REJECTED, VOIDED), `reference` (public transfer reference), `counterparty_name`, `note`, `created_at`, `updated_at` | One row per transfer id makes hold, settle and release idempotent. `amount_minor > 0` except `VOIDED` (0). State changes follow the table in ARCHITECTURE section 6.1. `counterparty_name`, `reference` and `note` are copied from the transfer snapshot at hold time so history needs no other service. |
+| `ledger_entries` | `id`, `wallet_id`, `transfer_id` (null for credits), `kind` (CREDIT, HOLD, SETTLE, RELEASE), `amount_minor`, `description`, `created_at` | Append-only; `amount_minor > 0`. Invariants in ARCHITECTURE section 6.1. Unique `(transfer_id, kind)` where `transfer_id` is not null. A SETTLE or RELEASE must reference a hold in state HELD at the time. |
+| `v_transactions` (view) | unified rows: `id`, `wallet_id`, `type` (CREDIT or DEBIT), `amount_minor`, `counterparty`, `status` (COMPLETED, PROCESSING, FAILED), `reference`, `note`, `occurred_at` | CREDIT rows from `ledger_entries` kind CREDIT; DEBIT rows from `holds`: `SETTLED` is COMPLETED, `HELD` is PROCESSING, `RELEASED` is FAILED; `REJECTED` and `VOIDED` rows are not shown. Serves history. Transfer status detail comes from `transfers`. |
+| `event_outbox` | see Messaging tables | Audit events. |
+
+## `transfers_db` (service `transfers`)
+
+| Table | Columns | Constraints and notes |
+|---|---|---|
+| `transfers` | `id`, `reference`, `user_id`, `beneficiary_id`, `amount_minor`, `fee_minor`, `currency`, `status`, `snapshot` jsonb, `snapshot_hash`, `requires_pin` bool, `origin_conversation_id` (null), `expires_at`, `confirmed_at`, `hold_placed_at`, `submitted_at`, `completed_at`, `status_since`, `rail_reference`, `rail_attempts` int, `rail_token` (copied from the beneficiary lookup; never returned by any API), `failure_code`, `review_from_status` (null), `created_at`, `updated_at`, `version` | `reference` unique, 10-character Crockford base32 shown to users (for example `TXN-7K3QH2M9XA`). `amount_minor > 0`. `status` values: PREPARED, CONFIRMED, HOLD_PLACED, SUBMITTED, SETTLING, RELEASING, COMPLETED, FAILED, PENDING_UNKNOWN, NEEDS_REVIEW, CANCELLED, EXPIRED. `rail_reference` equals the transfer id and is the idempotency key sent to the rail and the hold's key at the wallet. `snapshot` is immutable after creation (trigger or application check plus test) and contains the copied beneficiary name and masked account. `origin_conversation_id` is an opaque pointer set only through the internal prepare route. `status_since` is set by every status change and drives all time-in-status rules (watchdog, 30-minute and 24-hour horizons). `review_from_status` records where a transfer was when it entered `NEEDS_REVIEW` and decides which resolutions are allowed (ARCHITECTURE section 6.2). `total_minor` in API responses is computed as `amount_minor + fee_minor`. Partial unique index on `(user_id)` where `status = 'PREPARED'` (at most one prepared transfer per user). |
+| `transfer_events` | `id`, `transfer_id`, `from_status`, `to_status`, `reason`, `actor_type` (user, system, admin, service), `actor_id`, `request_id`, `created_at` | Append-only. Every status change writes one row in the same transaction. |
 | `idempotency_keys` | `id`, `user_id`, `scope` (for example `transfer.confirm`), `key`, `request_hash`, `status` (in_progress, completed), `response_status`, `response_body` jsonb, `locked_at`, `completed_at`, `expires_at` | Unique `(user_id, scope, key)`. Retained 24 hours. |
-| `outbox` | `id`, `topic` (for example `transfer.submit`, `transfer.reconcile`), `payload` jsonb, `available_at`, `attempts` int, `locked_by`, `locked_until`, `processed_at`, `last_error`, `created_at` | Partial index on `available_at` where `processed_at is null`. Workers claim with `FOR UPDATE SKIP LOCKED`. Processed rows purged after 7 days. |
+| `saga_commands` | `id`, `transfer_id`, `type` (`wallet.hold`, `rail.submit`, `rail.reconcile`, `wallet.settle`, `wallet.release`), `payload` jsonb, `available_at`, `attempts` int, `locked_by`, `locked_until`, `processed_at`, `last_error`, `created_at` | Partial index on `available_at` where `processed_at is null`. Workers claim with `FOR UPDATE SKIP LOCKED` and a lease (`locked_until`). Unique `(transfer_id, type)` where `processed_at is null` so a command is never queued twice. Processed rows purged after 7 days. |
+| `event_outbox` | see Messaging tables | `transfer.status_changed` and audit events. |
 
-### Conversation
+## `assistant_db` (service `assistant`)
 
 | Table | Columns | Constraints and notes |
 |---|---|---|
 | `conversations` | `id`, `user_id`, `title`, `locale`, `status` (open, closed), `created_at`, `last_message_at` | Index `(user_id, last_message_at desc)`. |
-| `messages` | `id`, `conversation_id`, `role` (user, assistant), `content` (masked), `language` (en, hi, hi-Latn), `client_message_id` (null), `meta` jsonb (interpretation, policy decision, card types, tool outcomes), `created_at` | Unique `(conversation_id, client_message_id)` where not null. Index `(conversation_id, created_at)`. |
+| `messages` | `id`, `conversation_id`, `role` (user, assistant, system_notice), `content` (masked), `language` (en, hi, hi-Latn), `client_message_id` (null), `meta` jsonb (interpretation, policy decision, card types, tool outcomes, `transfer_id` for notices), `created_at` | Unique `(conversation_id, client_message_id)` where not null. Index `(conversation_id, created_at)`. `system_notice` rows are written by the event consumer (transfer outcome updates); partial unique index on `(meta->>'transfer_id', meta->>'to_status')` where `role = 'system_notice'` makes a notice idempotent per transfer and status. |
 | `tool_invocations` | `id`, `message_id`, `tool`, `input` jsonb (masked), `outcome` (ok, denied, error), `error_code`, `latency_ms`, `created_at` | Feeds the admin inspector and tool metrics. |
-| `llm_calls` | `id`, `message_id` (null), `purpose` (interpret, repair, faq_answer, eval), `provider`, `model`, `prompt_masked`, `response_masked`, `tokens_in`, `tokens_out`, `latency_ms`, `outcome` (ok, invalid_output, timeout, error, circuit_open), `validation_error`, `created_at` | Append-only. |
-
-### Support and knowledge
-
-| Table | Columns | Constraints and notes |
-|---|---|---|
+| `llm_calls` | `id`, `message_id` (null), `purpose` (interpret, repair, faq_answer, eval), `provider`, `model`, `prompt_masked`, `response_masked`, `tokens_in`, `tokens_out`, `latency_ms`, `outcome` (ok, invalid_output, timeout, error, circuit_open, overloaded), `validation_error`, `created_at` | Append-only. |
 | `kb_articles` | `id`, `slug`, `title`, `body`, `locale`, `tags` text[], `tsv` tsvector (generated) | GIN index on `tsv`. A small curated set (10 to 15 articles, en and Hinglish). |
 | `support_tickets` | `id`, `user_id`, `conversation_id`, `subject`, `status` (open, in_progress, closed), `created_at`, `updated_at` | Subject is the user's own words, masked and truncated to 200 characters. |
+| `eval_runs` | `id`, `kind` (nlu, workflow), `dataset_version`, `provider`, `model`, `git_sha`, `started_at`, `finished_at`, `metrics` jsonb | Written only by `assistant` when the evaluation CLI posts a run to `POST /v1/admin/evals/runs`; no tool connects to `assistant_db`. |
+| `eval_results` | `id`, `run_id`, `case_id`, `language`, `passed` bool, `expected` jsonb, `actual` jsonb, `latency_ms`, `error` | Index `(run_id)`. |
+| `inbox` | see Messaging tables | For `transfer.status_changed`. |
+| `event_outbox` | see Messaging tables | Audit events. |
 
-### Audit and evaluation
+## `audit_db` (service `audit`)
 
 | Table | Columns | Constraints and notes |
 |---|---|---|
-| `audit_log` | `id` bigserial, `ts`, `actor_id`, `actor_role`, `action`, `resource_type`, `resource_id`, `result` (success, denied, error), `request_id`, `details` jsonb (masked), `prev_hash`, `hash` | Append-only. `hash = sha256(prev_hash || canonical_json(row without hash))`. Inserts are serialized (advisory lock) so the chain has one order. Index `(ts)`, `(actor_id, ts)`, `(resource_type, resource_id)`. |
-| `eval_runs` | `id`, `kind` (nlu, workflow), `dataset_version`, `provider`, `model`, `git_sha`, `started_at`, `finished_at`, `metrics` jsonb | Written by the eval CLI. |
-| `eval_results` | `id`, `run_id`, `case_id`, `language`, `passed` bool, `expected` jsonb, `actual` jsonb, `latency_ms`, `error` | Index `(run_id)`. |
+| `audit_log` | `id` bigserial, `occurred_at`, `recorded_at`, `source_service`, `source_event_id`, `actor_id`, `actor_role`, `action`, `resource_type`, `resource_id`, `result` (success, denied, error), `request_id`, `details` jsonb (masked), `prev_hash`, `hash` | Append-only. `hash = sha256(prev_hash || canonical_json(row without hash and prev_hash))`. Inserts are serialized (advisory lock) so the chain has one order: the order of ingestion. Unique `source_event_id`. Index `(occurred_at)`, `(actor_id, occurred_at)`, `(resource_type, resource_id)`. |
+| `inbox` | see Messaging tables | Deduplicates `audit.recorded` events. |
+| `anchors` | `id`, `audit_id`, `hash`, `anchored_at` | Append-only; also written to a log file and the log stream. |
+
+## Messaging tables (every service that publishes or consumes)
+
+| Table | Columns | Constraints and notes |
+|---|---|---|
+| `event_outbox` | `id` bigserial, `event_id` uuid, `type`, `version` int, `routing_key`, `envelope` jsonb, `created_at`, `published_at`, `attempts` int, `locked_until` | Inserted in the same transaction as the business change. A relay claims unpublished rows with `FOR UPDATE SKIP LOCKED`, publishes with confirms, then sets `published_at`. Partial index on `id` where `published_at is null`. Published rows purged after 7 days. |
+| `inbox` | `event_id` uuid primary key, `consumer`, `received_at` | Inserted in the same transaction as the consumer's effect; a duplicate violates the key and is acknowledged without effect. Purged after 14 days. |
 
 ## Indexes worth having
 
-`transfers (user_id, created_at desc)`, `transfers (status, updated_at)` for reconciliation scans, `transfers (reference)`, `ledger_entries (wallet_id, created_at)`, `outbox (available_at) where processed_at is null`, `messages (conversation_id, created_at)`, `audit_log (ts)`, `llm_calls (created_at)`.
+`transfers (user_id, created_at desc)`, `transfers (status, updated_at)` for reconciliation and watchdog scans, `transfers (reference)`, `ledger_entries (wallet_id, created_at)`, `holds (user_id, created_at)`, `saga_commands (available_at) where processed_at is null`, `messages (conversation_id, created_at)`, `audit_log (occurred_at)`, `llm_calls (created_at)`, `event_outbox (id) where published_at is null`.
 
-## Redis keys
+## Redis keys (key prefix per service)
 
-| Key | Value | TTL |
-|---|---|---|
-| `dlg:{conversationId}` | JSON: `pendingClarification {intent, missing[], partialEntities, askedCount}`, `pendingTransferId`, `lastLocale` | 30 minutes, refreshed on activity |
-| `rl:{scope}:{id}` | token-bucket counters (login, messages, ip) | window length |
-| `login:fail:{email}` and `login:fail:ip:{ip}` | failure counters and lockout flag | 15 minutes |
-| `cb:llm:{provider}` | circuit-breaker state (closed, open until timestamp, failure count) | 5 minutes after last event |
+| Key | Owner | Value | TTL |
+|---|---|---|---|
+| `assistant:dlg:{conversationId}` | `assistant` | JSON: `pendingClarification {intent, missing[], partialEntities, askedCount}`, `pendingTransferId`, `lastLocale` | 30 minutes, refreshed on activity |
+| `edge:rl:{scope}:{id}` and `assistant:rl:{scope}:{id}` | `edge`, `assistant` | token-bucket counters (ip, user, messages, tickets) | window length |
+| `edge:login:fail:{email}` and `edge:login:fail:ip:{ip}` | `edge` | failure counters and lockout flag | 15 minutes |
+| `{service}:cb:{target}` | each caller | circuit-breaker state (closed, open until timestamp, failure count) for `llm:{provider}`, `rail`, `wallet`, `transfers` | 5 minutes after last event |
 
-Losing Redis never affects money state (NFR-REL-5).
+Losing Redis never affects facts (NFR-REL-5).
 
 ## Data lifecycle
 
@@ -91,15 +104,18 @@ Losing Redis never affects money state (NFR-REL-5).
 |---|---|
 | Prepared transfers | Expire after 5 minutes (status EXPIRED); rows kept. |
 | Idempotency keys | 24 hours, then purged. |
-| Outbox | Processed rows purged after 7 days. |
+| Saga commands and event outbox | Processed rows purged after 7 days. |
+| Inbox | 14 days. |
 | Messages, tool invocations, LLM calls | 30 days by default (configurable); purge job is a Could. |
-| Ledger, transfers, transfer events, audit log | Kept for the life of the demo. |
+| Ledger, holds, transfers, transfer events, audit log | Kept for the life of the demo. |
 | Refresh tokens | Purged 7 days after expiry or revocation. |
 
 ## Seed data (synthetic, `pnpm seed`)
 
-- Users: three customers (`aarav`, `meera`, `vikram`), one support agent, one admin; all passwords and PINs come from environment variables with documented demo-only defaults in `.env.example`.
-- Wallets: opening CREDIT entries so each customer has a different balance; about 40 historical credits and completed transfers over the last 60 days for history queries.
-- Beneficiaries for `aarav`: Rohan Mehta (aliases include the Devanagari spelling), two people named Rahul (Rahul Sharma, Rahul Verma) to exercise ambiguity, and Priya Nair.
-- Knowledge base: 10 to 15 short articles (fees, limits, failed transfers, how to add a beneficiary).
+Each service seeds its own database with its own command; the user ids and transfer ids that must agree across services come from one fixed list in `packages/shared` (seed ids). `pnpm seed:check` verifies the cross-service agreement.
+
+- `edge`: three customers (`aarav`, `meera`, `vikram`), one support agent, one admin; all passwords and PINs come from environment variables with documented demo-only defaults in `.env.example`.
+- `wallet`: wallets with opening CREDIT entries so each customer has a different balance; about 40 historical credits and settled holds over the last 60 days; beneficiaries for `aarav`: Rohan Mehta (aliases include the Devanagari spelling), two people named Rahul (Rahul Sharma, Rahul Verma) to exercise ambiguity, and Priya Nair.
+- `transfers`: the matching completed historical transfers (same ids and references as the settled holds), so status lookups agree with history.
+- `assistant`: 10 to 15 knowledge-base articles (fees, limits, failed transfers, how to add a beneficiary).
 - Seed is idempotent and refuses to run when `NODE_ENV=production`.

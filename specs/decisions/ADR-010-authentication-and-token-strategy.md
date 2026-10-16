@@ -1,6 +1,6 @@
 # ADR-010: Authentication and token strategy
 
-Status: Proposed (2026-10-14).
+Status: Proposed (2026-10-14). Amended 2026-10-15 by ADR-018: identity lives in `edge`; access tokens are EdDSA-signed and verified by every service; the PIN check issues a short step-up assertion for `transfers`.
 
 ## Context
 
@@ -9,7 +9,7 @@ The API serves a SPA and must demonstrate sound token handling without depending
 ## Decision
 
 - Email and password with argon2id.
-- Access token: JWT, 900 seconds, claims `sub` and `role` only.
+- Access token: JWT signed with Ed25519 (EdDSA), 900 seconds, claims `iss`, `aud`, `sub`, `role`, `loc`, `iat`, `exp`, `jti`; no personal data. Only `edge` holds the private key.
 - Refresh token: opaque random value, stored only as a hash, rotated on every use, grouped in a family; reuse of a rotated token revokes the family and is audited.
 - Roles: customer, support, admin; every route declares allowed roles; undeclared routes are rejected at startup.
 - Transaction PIN (argon2id) required from a configurable amount; 3 wrong attempts lock for 15 minutes; counters in Postgres.

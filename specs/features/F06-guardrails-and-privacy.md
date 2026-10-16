@@ -1,6 +1,6 @@
 # F06: Guardrails, policy and privacy
 
-Covers: FR-SEC-1 to FR-SEC-6, FR-CONV-7 (limits), NFR-SEC-1, NFR-SEC-3 to NFR-SEC-5, NFR-PRIV-1.
+Covers: FR-SEC-1 to FR-SEC-6, FR-CONV-7 (limits), NFR-SEC-1, NFR-SEC-3 to NFR-SEC-5, NFR-PRIV-1, NFR-ARCH-3 (header and exposure checks).
 
 ## Problem and outcome
 
@@ -22,7 +22,7 @@ A pure function `decide(principal, interpretation, state) -> ALLOW | CLARIFY(slo
 | `SMALL_TALK`, `OUT_OF_SCOPE` | ALLOW (templates) |
 | anything else, any role other than customer | DENY |
 
-Each decision is audited when it leads to a tool call or a denial.
+Each decision is audited (as an event in `assistant`'s outbox) when it leads to a tool call or a denial. The engine lives in `packages/assistant-core` and runs in `assistant`; it is a defence for the model path only. Authorization of the user, role and ownership is enforced again by every service that owns the data (F01), so the policy engine is never the only barrier.
 
 ## Tool registry
 
@@ -48,31 +48,31 @@ Where it applies: the logger and trace exporter (central serializers), prompts s
 
 ## Output guard
 
-Applied to FAQ composer output and any free text before it is sent: (1) every transfer reference or identifier present must belong to the principal; (2) no email, phone or account pattern; (3) the canary string must not appear; (4) URLs only if present in the allowlisted KB set; (5) maximum length. On violation the reply is replaced by a safe template and `OUTPUT_GUARD_BLOCKED` is audited. Templated replies built from tool results are safe by construction but still pass the identifier check.
+Applied to FAQ composer output and any free text before it is sent: (1) every transfer reference or identifier present must belong to the principal; (2) no email, phone or account pattern; (3) the canary string must not appear; (4) URLs only if present in the allowlisted KB set; (5) maximum length. On violation the reply is replaced by a safe template and `output_guard.blocked` is audited. Templated replies built from tool results are safe by construction but still pass the identifier check.
 
 ## Limits and hardening
 
-Per user: 20 messages per minute, 3 tickets per hour, daily LLM cap; per IP: 120 requests per minute; request body 16 KB; message 1000 characters; model output tokens capped (interpreter 400, FAQ 300). Counters live in Redis and are shared across replicas. Security headers (including `Content-Security-Policy: default-src 'self'` for the web app), CORS allowlist from environment. Bearer tokens in headers, no cookies, so CSRF does not apply. Configuration is validated at startup (secrets present and long enough); secrets never appear in logs. Error responses never include stack traces, SQL or paths.
+Per user (counted in `assistant`): 20 messages per minute, 3 tickets per hour, daily LLM cap; per IP (counted in `edge`): 120 requests per minute; request body 16 KB (enforced at `edge` and again in each service); message 1000 characters; model output tokens capped (interpreter 400, FAQ 300). Counters live in Redis (key prefix per service) and are shared across replicas. Security headers (including `Content-Security-Policy: default-src 'self'` for the web app) and the CORS allowlist from environment are applied at `edge` and by the web server; internal listeners set no CORS headers. Bearer tokens in headers, no cookies, so CSRF does not apply. Configuration is validated at startup (secrets present and long enough); secrets never appear in logs. Error responses never include stack traces, SQL or paths.
 
 ## Acceptance criteria
 
 - AC-F06-1: Every row of the decision table has a unit test, including unknown intents and non-customer roles resulting in DENY.
-- AC-F06-2: A test walks all registered tool schemas and fails if any field is named `user_id`, `userId`, `principal` or `role`; the registry exports no confirm or cancel tool; a scripted model naming an unknown tool, or `confirm_transfer`, is rejected and a `POLICY_DENIED` audit entry exists.
+- AC-F06-2: A test walks all registered tool schemas and fails if any field is named `user_id`, `userId`, `principal` or `role`; the registry exports no confirm or cancel tool; a scripted model naming an unknown tool, or `confirm_transfer`, is rejected and a `policy.denied` audit entry exists.
 - AC-F06-3: An injection corpus of at least 30 payloads (English, Hindi, Hinglish; direct instructions, role play, fake system messages, "confirm all pending transfers", prompt-leak requests) is run end to end. After each: no transfer or ledger change, no tool outside the allowlist executed, no canary and no foreign identifiers in the output.
 - AC-F06-4: A beneficiary name and a transaction note seeded with injection text never appear in any captured LLM request, and render as escaped text in the UI.
 - AC-F06-5: Each redaction pattern passes its positive and negative cases; a property test shows masked output contains none of the original sensitive substrings while amounts survive.
 - AC-F06-6: After sending a message containing a phone number, an email and a PAN-like value, none appears raw in the log stream, span attributes, `llm_calls`, `messages`, tickets or admin transcripts.
 - AC-F06-7: The prompt sent to the model contains the redacted text (checked by request capture).
 - AC-F06-8: A scripted FAQ composer output containing a foreign transfer reference, the canary, a non-allowlisted URL or an over-length body is replaced by the safe template and audited.
-- AC-F06-9: The 21st message in a minute returns 429; the 4th ticket in an hour is refused; a body over 16 KB returns 413; the limits hold across two API replicas sharing Redis.
-- AC-F06-10: Security headers are present on API and web responses; a request from an unlisted origin gets no CORS grant.
-- AC-F06-11: Starting with a missing or too-short signing secret exits with a clear error; a full test run's log output contains none of the configured secret values.
+- AC-F06-9: The 21st message in a minute returns 429; the 4th ticket in an hour is refused; a body over 16 KB returns 413; the 121st request from one IP in a minute returns 429 at `edge`; the limits hold across two replicas of the counting service sharing Redis.
+- AC-F06-10: Security headers are present on `edge` and web responses; a request from an unlisted origin gets no CORS grant; the internal listeners of all services send no CORS headers.
+- AC-F06-11: Starting any service with a missing or malformed key or secret it needs exits with a clear error naming the variable (never the value); a full test run's log output across all services contains none of the configured secret values.
 - AC-F06-12: Forcing an unexpected error returns the `INTERNAL` problem body with a request id and no stack trace, SQL or file path.
 - AC-F06-13: The OWASP API mapping tests in `TESTING.md` section 5 exist and pass.
 
 ## Interfaces and dependencies
 
-`packages/core` modules `policy`, `tools`, `redaction`, `outputGuard`; Redis rate-limit adapter; logger and OpenTelemetry processors in `apps/server`; F03 for cross-checks; F07 for audit.
+`packages/assistant-core` modules `policy`, `tools`, `outputGuard`; `packages/shared` module `redaction` (used by every service); `packages/platform` rate-limit adapter, logger and OpenTelemetry processors (F10); F03 for cross-checks; F07 for audit.
 
 ## Tests required
 

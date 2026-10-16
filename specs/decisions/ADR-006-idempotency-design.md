@@ -1,6 +1,6 @@
 # ADR-006: Idempotency design
 
-Status: Proposed (2026-10-14).
+Status: Proposed (2026-10-14). Amended 2026-10-15: the user-facing key lives in `transfers`; wallet commands are idempotent by transfer id (ADR-016).
 
 ## Context
 
@@ -14,6 +14,7 @@ Clients retry on timeouts, users double-click, mobile networks duplicate request
 - Only successful results are stored. Failed attempts release the key so the client can correct the problem and retry.
 - Keys expire after 24 hours.
 - The rail call uses `client_reference` equal to the transfer id so that worker retries are idempotent on the partner side.
+- Wallet commands (hold, settle, release) are idempotent by transfer id through the `holds` row; a repeated command returns the current state and a conflicting one is refused. Event consumers deduplicate by `event_id` in an inbox (ADR-017).
 - The conversation endpoint has a separate `client_message_id` dedupe so a resent message never triggers a second LLM call.
 
 ## Alternatives considered

@@ -61,7 +61,7 @@ Interpretation schema (Zod in `shared`):
 
 **Date resolver** (fixed clock in tests, zone `Asia/Kolkata`, weeks run Monday to Sunday). Maps `aaj`, `kal` (past reading, because history is always in the past), `parso`, `pichle hafte`, `is hafte`, `is mahine`, `pichle mahine`, `pichle 7 din` and the Devanagari and English equivalents to concrete ranges. With clock 2026-10-14 (Wednesday): `last_week` is 2026-10-05 to 2026-10-11; `yesterday` is 2026-10-13; `this_month` is 2026-10-01 to 2026-10-14.
 
-**Recipient resolver** (server-side, never sent to the model). Normalize (Unicode NFKC, casefold, strip honorifics such as ji, bhai, sir, madam, punctuation). Match tiers against the user's beneficiary names and aliases: 1 exact, 2 token prefix, 3 edit distance of 1 for queries of 5 or more characters. One candidate at the best tier means resolved; several means ambiguous (ask which, listing masked accounts); none means not found. Devanagari spellings work through seeded aliases.
+**Recipient resolver** (in `assistant`, never sent to the model; the beneficiary list is fetched from `wallet` as the user, `GET /v1/beneficiaries`, and cached for the turn only). Normalize (Unicode NFKC, casefold, strip honorifics such as ji, bhai, sir, madam, punctuation). Match tiers against the user's beneficiary names and aliases: 1 exact, 2 token prefix, 3 edit distance of 1 for queries of 5 or more characters. One candidate at the best tier means resolved; several means ambiguous (ask which, listing masked accounts); none means not found. Devanagari spellings work through seeded aliases.
 
 ## Interpreter
 
@@ -94,7 +94,7 @@ The model's output is untrusted; nothing outside the schema is read. The user te
 
 ## Interfaces and dependencies
 
-Ports: `LlmClient`, `BeneficiaryRepo` (resolver only), `Clock`. Pure modules in `packages/core`. Contracts in `packages/shared`.
+Ports: `LlmClient`, `BeneficiaryDirectory` (resolver only; the adapter calls `wallet` as the user, tests use an in-memory directory), `Clock`. Pure modules in `packages/assistant-core`. Contracts in `packages/shared`.
 
 ## Tests required
 

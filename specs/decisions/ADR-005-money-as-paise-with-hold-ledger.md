@@ -1,6 +1,6 @@
 # ADR-005: Money as integer paise with a hold-based ledger in Postgres
 
-Status: Proposed (2026-10-14).
+Status: Proposed (2026-10-14). Amended 2026-10-15: the ledger lives in the `wallet` service and holds are saga commands (ADR-015, ADR-016).
 
 ## Context
 
@@ -10,8 +10,9 @@ Transfers are asynchronous and the partner can answer late, wrongly or not at al
 
 - All amounts are `BIGINT` paise (`*_minor`); currency fixed to INR by constraint. No floating point near money.
 - Each wallet has `available_minor` and `held_minor`. Confirming a transfer moves the total from available to held (HOLD). Completion removes it from held (SETTLE). Failure moves it back to available (RELEASE). Credits add to available.
-- `ledger_entries` is append-only with a kind, an amount and the resulting balances. Invariants (never negative, entries reconcile to balances, exactly one SETTLE or RELEASE per HOLD) are checked by property tests and a sweep after reliability tests.
-- Wallet rows are locked with `SELECT ... FOR UPDATE` in a fixed order after the transfer row.
+- `ledger_entries` is append-only with a kind and an amount; balances are the sums defined in ARCHITECTURE section 6.1. Invariants (never negative, entries reconcile to balances, exactly one SETTLE or RELEASE per HOLD) are checked by property tests and a sweep after reliability tests.
+- Wallet rows are locked with `SELECT ... FOR UPDATE` inside each wallet transaction. There is no cross-service lock: the lock order rule is now per service (`transfers` locks the transfer row, `wallet` locks the wallet row) and no transaction ever waits on another service.
+- A `holds` table (one row per transfer id, states `HELD`, `SETTLED`, `RELEASED`, `REJECTED`, `VOIDED`) makes hold, settle and release idempotent commands and protects against late or duplicate messages (ADR-016).
 
 ## Alternatives considered
 
@@ -21,7 +22,7 @@ Transfers are asynchronous and the partner can answer late, wrongly or not at al
 
 ## Consequences
 
-Clear semantics for "processing" and "being verified" states, and a ledger that can be audited. Limits and daily totals are computed from transfers and ledger in SQL.
+Clear semantics for "processing" and "being verified" states, and a ledger that can be audited. The wallet's ledger and holds answer balance and history; limits and daily totals are computed by `transfers` from its own transfer rows (a different database), so no query spans both.
 
 ## Revisit when
 

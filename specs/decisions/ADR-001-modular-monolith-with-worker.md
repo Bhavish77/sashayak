@@ -1,6 +1,6 @@
 # ADR-001: Modular monolith with worker and simulated rail
 
-Status: Proposed (2026-10-14). Becomes Accepted when the owner approves the specs.
+Status: **Superseded by ADR-015 (2026-10-15).** Kept for history: it explains why a monolith was the first choice and which seams (ports, outbox, hold ledger) made the later split affordable.
 
 ## Context
 
