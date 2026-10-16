@@ -5,7 +5,19 @@
  * floating point near money).
  */
 
-const RUPEES_INPUT_PATTERN = /^\d{1,3}(,?\d{2,3})*(\.\d{1,2})?$/;
+/**
+ * Exactly three valid shapes for the integer part, each with an optional
+ * .d or .dd fraction:
+ *  - no grouping at all: any number of digits ("500", "1234567")
+ *  - Western: first group 1-3 digits, then every later group exactly 3
+ *    digits ("1,000", "1,234,567")
+ *  - Indian: first group 1-3 digits, then any number of 2-digit groups,
+ *    then a final group of exactly 3 digits ("1,00,000", "12,34,567")
+ * A previous looser pattern let commas land almost anywhere (so
+ * "1234,56" silently parsed as 123456 rupees instead of being rejected —
+ * a 100x misread of real money).
+ */
+const RUPEES_INPUT_PATTERN = /^(\d+|\d{1,3}(,\d{3})+|\d{1,3}(,\d{2})*,\d{3})(\.\d{1,2})?$/;
 
 export function parseRupeesToMinor(input: string): number {
   const withoutCommas = input.replace(/,/g, '');
@@ -23,6 +35,7 @@ export function parseRupeesToMinor(input: string): number {
 
 export function formatMinorToRupees(minor: number): string {
   assertIntegerMinor(minor);
+  assertSafeInteger(BigInt(minor));
 
   const sign = minor < 0 ? '-' : '';
   const absMinor = Math.abs(minor);

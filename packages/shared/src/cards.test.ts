@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { cardSchema, messageSchema } from './cards';
 
 describe('cardSchema', () => {
-  it('accepts every closed card type with arbitrary data', () => {
+  // navigation's data is now a closed { screen } shape (see the
+  // "navigation card" describe block below); the other 7 types stay
+  // z.unknown() until their own owning task narrows them.
+  it('accepts every closed card type other than navigation with arbitrary data', () => {
     for (const type of [
       'balance',
       'transactions',
       'transfer_confirmation',
       'transfer_status',
-      'navigation',
       'menu',
       'faq',
       'ticket',
@@ -26,6 +28,31 @@ describe('cardSchema', () => {
 
   it('rejects unknown top-level properties', () => {
     expect(() => cardSchema.parse({ type: 'balance', data: {}, extra: 1 })).toThrow();
+  });
+});
+
+describe('cardSchema: navigation card', () => {
+  it('accepts a navigation card with an allowlisted screen', () => {
+    const value = { type: 'navigation', data: { screen: 'send_money' } };
+    expect(cardSchema.parse(value)).toEqual(value);
+  });
+
+  it('rejects navigation data missing screen', () => {
+    expect(() => cardSchema.parse({ type: 'navigation', data: {} })).toThrow();
+  });
+
+  it('rejects navigation data with an unknown property', () => {
+    expect(() =>
+      cardSchema.parse({ type: 'navigation', data: { screen: 'home', extra: 1 } }),
+    ).toThrow();
+  });
+
+  it('rejects a screen outside the navigation allowlist', () => {
+    expect(() => cardSchema.parse({ type: 'navigation', data: { screen: 'settings' } })).toThrow();
+  });
+
+  it('rejects arbitrary data that would have passed before this was narrowed', () => {
+    expect(() => cardSchema.parse({ type: 'navigation', data: { anything: 1 } })).toThrow();
   });
 });
 

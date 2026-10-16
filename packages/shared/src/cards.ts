@@ -1,20 +1,30 @@
 import { z } from 'zod';
-import { cardTypeSchema, localeSchema, messageRoleSchema } from './enums';
+import { cardTypeSchema, localeSchema, messageRoleSchema, screenSchema } from './enums';
 import { messageIdSchema } from './ids';
 
 /**
  * `data`'s shape per card type depends on domain objects (the full
  * Transfer object, transaction history rows, FAQ results) that belong to
- * the services that produce them. Only `type` is closed here; each
- * card-producing task narrows its own `data` schema into a discriminated
- * union as it lands (balance, navigation, transfer cards and so on).
+ * the services that produce them. Only `navigation` is narrowed so far
+ * (its shape — just a screen id — was already fully specified); each
+ * other card-producing task narrows its own `data` schema as it lands
+ * (balance, transfer cards and so on).
  */
-export const cardSchema = z
+const navigationCardSchema = z
   .object({
-    type: cardTypeSchema,
+    type: z.literal('navigation'),
+    data: z.object({ screen: screenSchema }).strict(),
+  })
+  .strict();
+
+const otherCardSchema = z
+  .object({
+    type: cardTypeSchema.exclude(['navigation']),
     data: z.unknown(),
   })
   .strict();
+
+export const cardSchema = z.union([navigationCardSchema, otherCardSchema]);
 export type Card = z.infer<typeof cardSchema>;
 
 export const messageSchema = z
