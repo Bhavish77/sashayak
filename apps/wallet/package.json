@@ -6,6 +6,7 @@
   "main": "./src/main/index.ts",
   "types": "./src/main/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --root ../.. apps/wallet"
   }
 }
