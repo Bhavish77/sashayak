@@ -1,0 +1,11 @@
+{
+  "name": "@sahayak/wallet",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/main/index.ts",
+  "types": "./src/main/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

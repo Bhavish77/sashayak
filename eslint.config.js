@@ -10,7 +10,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       'tools/fixtures/lint-violation/**',
-      'tools/fixtures/arch-violation/**',
+      'tools/fixtures/arch-violations/**',
     ],
   },
   js.configs.recommended,
