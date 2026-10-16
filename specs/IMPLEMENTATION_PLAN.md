@@ -84,6 +84,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Done when:** tests above pass; package exports are the only way other packages see these types.
 - **Verify:** `pnpm --filter @sahayak/shared test:unit`, `pnpm typecheck`, `pnpm arch`.
 - **Evidence:** All three ran and passed on 2026-10-16: `pnpm --filter @sahayak/shared test:unit` (12 files, 115/115 tests — added a `test:unit` script to every workspace package, scoped via a CLI filter against the one root Vitest config, so this exact command works); `pnpm typecheck` (12/12 packages "Done"); `pnpm arch` (48 modules, 75 deps, 0 violations). Full-repo `pnpm test:unit` also run: 26 files, 133/133 tests. `pnpm lint` also run and clean. Card `data` payloads (balance/navigation/etc.) are intentionally left as `z.unknown()` for now — see Deviations in the task report.
+  **Update (2026-10-16):** fixed a money-parser bug found after the task closed — `parseRupeesToMinor` accepted malformed digit grouping ("1234,56" parsed as 123456 rupees, a 100x misread). Tests written first and confirmed red, then the pattern fixed to exactly three valid shapes (none, Western, Indian). Also narrowed the navigation card's `data` to a strict `{ screen }` and added the safe-integer guard to `formatMinorToRupees`. Re-ran and passed: `pnpm lint`, `pnpm typecheck` (12/12), `pnpm arch` (48 modules, 75 deps, 0 violations), `pnpm test:unit` (26 files, 151/151 tests).
 
 ### T04. Service contracts, events and canonical JSON
 - [ ] Done
