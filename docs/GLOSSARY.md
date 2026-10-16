@@ -2,5 +2,9 @@
 
 Plain-language definitions for domain and technical terms, added the first time each one appears in the implementation. This file is public, so keep wording neutral.
 
-| Term | Means |
-| ---- | ----- |
+| Term                | Means                                                                                                                                                                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Minor units (paise) | The smallest unit of a currency — for INR, paise (1 rupee = 100 paise). All amounts are stored and computed as whole-number paise, never as a rupee amount with a decimal point, so rounding errors in binary floating point can never creep into a balance.                                       |
+| Hold                | Money set aside in a wallet for a transfer that hasn't finished yet: moved out of "available" into "held," but not yet actually paid out. A hold is later either settled (money leaves for good) or released (money returns to available) — never both.                                            |
+| Branded type        | A plain string or number (like a UUID) wrapped with a compile-time-only tag so a `TransferId` and a `UserId` can't be mixed up by accident, even though they're both just strings at runtime. The tag exists only for the type checker; it adds nothing to what's stored or sent over the network. |
+| problem+json        | A standard shape for API error responses (RFC 9457): every error comes back with the same fields (`type`, `title`, `status`, a short machine-readable `code`, a human `detail`, and the `request_id` to quote when asking for help), instead of each error inventing its own shape.                |
