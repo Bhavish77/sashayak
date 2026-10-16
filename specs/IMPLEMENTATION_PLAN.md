@@ -75,7 +75,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Evidence:** All five ran and passed on 2026-10-16 (Node 22.13.0, pnpm 10.17.1, Windows 11): `pnpm install --frozen-lockfile` (13 workspace projects, up to date); `pnpm lint` (ESLint 0 problems, Prettier clean); `pnpm typecheck` (12/12 packages "Done"); `pnpm arch` (26 modules, 29 deps, 0 violations on the real repo); `pnpm test:unit` (15 files, 19/19 tests). The five deliberate fixtures under `tools/fixtures/arch-violations/` each fail with the expected rule name (`wallet-never-imports-another-app`, `assistant-domain-imports-shared-only`, `assistant-core-no-infra-dependencies`, `shared-imports-nothing-internal`, `no-circular`), verified both by direct `depcruise` runs and by the permanent Vitest regression tests. `grep` for `apps/server`, `packages/core` and `@sahayak/core`/`@sahayak/server` across the repo (excluding `specs/`) and in `pnpm-lock.yaml` returns nothing. Not run: anything needing Docker/Postgres/Redis/RabbitMQ (unchanged from T01; still not required by this task).
 
 ### T03. Shared domain contracts
-- [ ] Done
+- [x] Done
 - **Depends on:** T02
 - **Covers:** FR-NLU-2, FR-NLU-4 (schema), NFR-MAINT-3 (base)
 - **Spec:** API conventions and error table; F03 interpretation schema; DATA_MODEL conventions; ARCHITECTURE section 6.2 (statuses)
@@ -83,7 +83,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Build:** in `packages/shared`: branded id types, money type and formatter, enums (intents, transfer statuses, hold states, failure codes, roles, locales, screens), error-code table (public codes from `API.md` and internal codes from `INTERNAL_API.md`), problem+json schema, pagination schemas, card and message schemas, interpretation schema, confirm and cancel lexicon data, a `Clock` port with a fake clock (ARCHITECTURE section 4 puts it in `shared` so that `assistant-core` can use it), message catalogs (initially the keys needed so far).
 - **Done when:** tests above pass; package exports are the only way other packages see these types.
 - **Verify:** `pnpm --filter @sahayak/shared test:unit`, `pnpm typecheck`, `pnpm arch`.
-- **Evidence:**
+- **Evidence:** All three ran and passed on 2026-10-16: `pnpm --filter @sahayak/shared test:unit` (12 files, 115/115 tests — added a `test:unit` script to every workspace package, scoped via a CLI filter against the one root Vitest config, so this exact command works); `pnpm typecheck` (12/12 packages "Done"); `pnpm arch` (48 modules, 75 deps, 0 violations). Full-repo `pnpm test:unit` also run: 26 files, 133/133 tests. `pnpm lint` also run and clean. Card `data` payloads (balance/navigation/etc.) are intentionally left as `z.unknown()` for now — see Deviations in the task report.
 
 ### T04. Service contracts, events and canonical JSON
 - [ ] Done
