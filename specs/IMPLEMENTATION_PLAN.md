@@ -64,7 +64,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Note (2026-10-15):** T01 was built before the decision to split the system into five services (ADR-015). Its workspace (`apps/server`, `packages/core`) is reshaped by T02; nothing else in T01 changes.
 
 ### T02. Reshape the workspace for five services
-- [ ] Done
+- [x] Done
 - **Depends on:** T01
 - **Covers:** NFR-MAINT-1, NFR-ARCH-1 (architecture rules), FR-SVC-1 (layout)
 - **Spec:** ARCHITECTURE sections 3 and 4; ADR-015; F10 AC-F10-2; TESTING section 8
@@ -72,7 +72,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Build:** rename `packages/core` to `packages/assistant-core`; add `packages/platform`; replace `apps/server` with `apps/edge`, `apps/assistant`, `apps/wallet`, `apps/transfers` and `apps/audit`, each with `src/{domain,app,adapters,main}`, `migrations/` and `seed/` folders and an entry point that only prints its service name for now; keep `apps/mock-rail`, `apps/web`, `packages/shared`, `packages/llm`, `packages/evals`. Update workspace names, TypeScript references, ESLint and Vitest configuration and the dependency-cruiser rules to the rules in ARCHITECTURE section 4. Update the placeholder root scripts to the list in TESTING section 8, each pointing at the task that will build it.
 - **Done when:** `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm arch` and `pnpm test:unit` pass; every deliberate violation fails `arch`; no file refers to `apps/server` or `packages/core`.
 - **Verify:** the commands above.
-- **Evidence:**
+- **Evidence:** All five ran and passed on 2026-10-16 (Node 22.13.0, pnpm 10.17.1, Windows 11): `pnpm install --frozen-lockfile` (13 workspace projects, up to date); `pnpm lint` (ESLint 0 problems, Prettier clean); `pnpm typecheck` (12/12 packages "Done"); `pnpm arch` (26 modules, 29 deps, 0 violations on the real repo); `pnpm test:unit` (15 files, 19/19 tests). The five deliberate fixtures under `tools/fixtures/arch-violations/` each fail with the expected rule name (`wallet-never-imports-another-app`, `assistant-domain-imports-shared-only`, `assistant-core-no-infra-dependencies`, `shared-imports-nothing-internal`, `no-circular`), verified both by direct `depcruise` runs and by the permanent Vitest regression tests. `grep` for `apps/server`, `packages/core` and `@sahayak/core`/`@sahayak/server` across the repo (excluding `specs/`) and in `pnpm-lock.yaml` returns nothing. Not run: anything needing Docker/Postgres/Redis/RabbitMQ (unchanged from T01; still not required by this task).
 
 ### T03. Shared domain contracts
 - [ ] Done
