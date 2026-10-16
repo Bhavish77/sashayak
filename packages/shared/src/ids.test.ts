@@ -3,6 +3,7 @@ import {
   brandedUuid,
   beneficiaryIdSchema,
   conversationIdSchema,
+  eventIdSchema,
   messageIdSchema,
   transferIdSchema,
   userIdSchema,
@@ -34,6 +35,7 @@ describe('concrete branded id schemas', () => {
     ['beneficiaryIdSchema', beneficiaryIdSchema],
     ['conversationIdSchema', conversationIdSchema],
     ['messageIdSchema', messageIdSchema],
+    ['eventIdSchema', eventIdSchema],
   ])('%s accepts a valid UUID and rejects garbage', (_name, schema) => {
     expect(schema.parse(VALID_UUID)).toBe(VALID_UUID);
     expect(() => schema.parse('garbage')).toThrow();

@@ -16,7 +16,7 @@
     "test:unit": "vitest run",
     "test:int": "node tools/scripts/not-built.mjs test:int \"Needs real Postgres, Redis and RabbitMQ per service; lands starting T08 (database kit), T09 (Redis kit) and T10 (messaging kit). Start infra with 'pnpm infra:test:up' once it exists.\"",
     "infra:test:up": "node tools/scripts/not-built.mjs infra:test:up \"Needs the per-service database/Redis/RabbitMQ test harness; lands in T08-T10.\"",
-    "test:contract": "node tools/scripts/not-built.mjs test:contract \"Needs the shared route and event registry and contract fakes; lands in T04, then provider/consumer tests land per service.\"",
+    "test:contract": "vitest run packages/shared/src/events packages/shared/src/routes packages/shared/src/service-acl.test.ts",
     "test:reliability": "node tools/scripts/not-built.mjs test:reliability \"Needs the resilience primitives and the transfer saga; lands starting T09, completed in T33 (transfers reliability suite).\"",
     "test:system": "node tools/scripts/not-built.mjs test:system \"Needs the full compose stack and system-test harness; lands in T35 (wiring), T36 (kill-at-every-step matrix).\"",
     "test:security": "node tools/scripts/not-built.mjs test:security \"Needs identity and the authorization test framework; lands starting T16, completed T47 (injection and guardrail tests).\"",

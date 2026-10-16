@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  auditActions,
+  auditResults,
   cardTypes,
   failureCodes,
   holdStates,
@@ -8,6 +10,7 @@ import {
   messageRoles,
   roles,
   screens,
+  serviceNames,
   transferStatuses,
 } from './enums';
 
@@ -113,5 +116,63 @@ describe('other closed enums', () => {
 
   it('messageRoles has exactly user, assistant, system_notice', () => {
     expect(new Set(messageRoles)).toEqual(new Set(['user', 'assistant', 'system_notice']));
+  });
+
+  it('serviceNames has exactly the five application services (ADR-015)', () => {
+    expect(new Set(serviceNames)).toEqual(
+      new Set(['edge', 'assistant', 'wallet', 'transfers', 'audit']),
+    );
+  });
+
+  it('auditResults has exactly success, denied, error', () => {
+    expect(new Set(auditResults)).toEqual(new Set(['success', 'denied', 'error']));
+  });
+
+  it('auditActions has exactly the forty actions in F07 "What is recorded"', () => {
+    expect(auditActions).toHaveLength(40);
+    expect(new Set(auditActions)).toEqual(
+      new Set([
+        'auth.login.success',
+        'auth.login.failure',
+        'auth.refresh',
+        'auth.refresh_reuse_detected',
+        'auth.logout',
+        'auth.pin.failure',
+        'auth.pin.locked',
+        'auth.pin.changed',
+        'assistant.action',
+        'policy.denied',
+        'output_guard.blocked',
+        'ticket.created',
+        'transfer.prepared',
+        'transfer.confirmed',
+        'transfer.hold_placed',
+        'transfer.submitted',
+        'transfer.settling',
+        'transfer.releasing',
+        'transfer.completed',
+        'transfer.failed',
+        'transfer.pending_unknown',
+        'transfer.needs_review',
+        'transfer.cancelled',
+        'transfer.expired',
+        'transfer.resolved',
+        'wallet.hold_placed',
+        'wallet.hold_rejected',
+        'wallet.hold_settled',
+        'wallet.hold_released',
+        'wallet.hold_voided',
+        'beneficiary.created',
+        'admin.view_conversation',
+        'admin.unmask',
+        'admin.view_llm_calls',
+        'admin.view_tickets',
+        'admin.view_transfer',
+        'admin.reconcile',
+        'admin.resolve',
+        'admin.view_audit',
+        'audit.verify',
+      ]),
+    );
   });
 });

@@ -111,3 +111,59 @@ export const dateRangeRelatives = [
 ] as const;
 export const dateRangeRelativeSchema = z.enum(dateRangeRelatives);
 export type DateRangeRelative = z.infer<typeof dateRangeRelativeSchema>;
+
+/** ADR-015: the five application services (excludes mock-rail and web, which are not event producers or internal-route callees). */
+export const serviceNames = ['edge', 'assistant', 'wallet', 'transfers', 'audit'] as const;
+export const serviceNameSchema = z.enum(serviceNames);
+export type ServiceName = z.infer<typeof serviceNameSchema>;
+
+/** DATA_MODEL.md audit_log.result. */
+export const auditResults = ['success', 'denied', 'error'] as const;
+export const auditResultSchema = z.enum(auditResults);
+export type AuditResult = z.infer<typeof auditResultSchema>;
+
+/** F07 "What is recorded": the closed list of audit.recorded action strings. */
+export const auditActions = [
+  'auth.login.success',
+  'auth.login.failure',
+  'auth.refresh',
+  'auth.refresh_reuse_detected',
+  'auth.logout',
+  'auth.pin.failure',
+  'auth.pin.locked',
+  'auth.pin.changed',
+  'assistant.action',
+  'policy.denied',
+  'output_guard.blocked',
+  'ticket.created',
+  'transfer.prepared',
+  'transfer.confirmed',
+  'transfer.hold_placed',
+  'transfer.submitted',
+  'transfer.settling',
+  'transfer.releasing',
+  'transfer.completed',
+  'transfer.failed',
+  'transfer.pending_unknown',
+  'transfer.needs_review',
+  'transfer.cancelled',
+  'transfer.expired',
+  'transfer.resolved',
+  'wallet.hold_placed',
+  'wallet.hold_rejected',
+  'wallet.hold_settled',
+  'wallet.hold_released',
+  'wallet.hold_voided',
+  'beneficiary.created',
+  'admin.view_conversation',
+  'admin.unmask',
+  'admin.view_llm_calls',
+  'admin.view_tickets',
+  'admin.view_transfer',
+  'admin.reconcile',
+  'admin.resolve',
+  'admin.view_audit',
+  'audit.verify',
+] as const;
+export const auditActionSchema = z.enum(auditActions);
+export type AuditAction = z.infer<typeof auditActionSchema>;

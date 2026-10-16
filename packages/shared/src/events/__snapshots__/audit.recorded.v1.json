@@ -1,0 +1,15 @@
+{
+  "occurred_at": { "required": true, "nullable": false, "kind": "string" },
+  "actor_id": { "required": true, "nullable": true, "kind": "string" },
+  "actor_role": { "required": true, "nullable": true, "kind": "string" },
+  "action": {
+    "required": true,
+    "nullable": false,
+    "kind": "enum:admin.reconcile,admin.resolve,admin.unmask,admin.view_audit,admin.view_conversation,admin.view_llm_calls,admin.view_tickets,admin.view_transfer,assistant.action,audit.verify,auth.login.failure,auth.login.success,auth.logout,auth.pin.changed,auth.pin.failure,auth.pin.locked,auth.refresh,auth.refresh_reuse_detected,beneficiary.created,output_guard.blocked,policy.denied,ticket.created,transfer.cancelled,transfer.completed,transfer.confirmed,transfer.expired,transfer.failed,transfer.hold_placed,transfer.needs_review,transfer.pending_unknown,transfer.prepared,transfer.releasing,transfer.resolved,transfer.settling,transfer.submitted,wallet.hold_placed,wallet.hold_rejected,wallet.hold_released,wallet.hold_settled,wallet.hold_voided"
+  },
+  "resource_type": { "required": true, "nullable": false, "kind": "string" },
+  "resource_id": { "required": true, "nullable": false, "kind": "string" },
+  "result": { "required": true, "nullable": false, "kind": "enum:denied,error,success" },
+  "request_id": { "required": true, "nullable": false, "kind": "string" },
+  "details": { "required": true, "nullable": false, "kind": "record" }
+}

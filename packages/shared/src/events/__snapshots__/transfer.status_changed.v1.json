@@ -1,0 +1,22 @@
+{
+  "transfer_id": { "required": true, "nullable": false, "kind": "string" },
+  "reference": { "required": true, "nullable": false, "kind": "string" },
+  "user_id": { "required": true, "nullable": false, "kind": "string" },
+  "from_status": {
+    "required": true,
+    "nullable": true,
+    "kind": "enum:CANCELLED,COMPLETED,CONFIRMED,EXPIRED,FAILED,HOLD_PLACED,NEEDS_REVIEW,PENDING_UNKNOWN,PREPARED,RELEASING,SETTLING,SUBMITTED"
+  },
+  "to_status": {
+    "required": true,
+    "nullable": false,
+    "kind": "enum:CANCELLED,COMPLETED,CONFIRMED,EXPIRED,FAILED,HOLD_PLACED,NEEDS_REVIEW,PENDING_UNKNOWN,PREPARED,RELEASING,SETTLING,SUBMITTED"
+  },
+  "amount_minor": { "required": true, "nullable": false, "kind": "number" },
+  "failure_code": {
+    "required": true,
+    "nullable": true,
+    "kind": "enum:ADMIN_RESOLVED,HOLD_REJECTED,INSUFFICIENT_FUNDS,RAIL_INVALID,RAIL_REJECTED"
+  },
+  "origin_conversation_id": { "required": true, "nullable": true, "kind": "string" }
+}
