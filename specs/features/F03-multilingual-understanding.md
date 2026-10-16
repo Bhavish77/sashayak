@@ -41,7 +41,7 @@ Interpretation schema (Zod in `shared`):
 
 ## Deterministic helpers
 
-**Amount parser** (runs on the raw normalized text, independent of the model). Recognized: ASCII and Devanagari digits; Indian and Western grouping; currency markers (`₹`, `rs`, `rs.`, `inr`, `rupaye`, `रुपये`, `/-`); suffixes `k`; multipliers `hazaar`/`hazar`/`हज़ार`, `lakh`/`lac`/`लाख`, `sau`/`सौ`; fractions `dedh` (1.5), `dhai` (2.5), `sawa` (1.25), `sadhe` (plus 0.5); spoken numbers in Hindi (`paanch sau`, `do hazaar`) and English words. Returns all candidate amounts in paise. More than two decimal places is invalid.
+**Amount parser** (runs on the raw normalized text, independent of the model). Recognized: ASCII and Devanagari digits; Indian and Western grouping; currency markers (`₹`, `rs`, `rs.`, `inr`, `rupaye`, `रुपये`, `/-`); suffixes `k`; multipliers `hazaar`/`hazar`/`हज़ार`, `lakh`/`lac`/`लाख`, `sau`/`सौ`; fractions `dedh` (1.5), `dhai` (2.5), `sawa` (1.25), `sadhe` (plus 0.5); spoken numbers in Hindi (`paanch sau`, `do hazaar`) and English words. Returns all candidate amounts in paise. More than two decimal places is invalid. **Amounts are always rupees:** a bare number such as 500 means ₹500, which is 50,000 paise, because the app is INR-only and people write amounts in rupees; paise are only the internal storage unit. A number directly followed by `paise`, `paisa`, `पैसे` or `पैसा` (for example "50 paise") is not read as rupees: it yields no candidate and is flagged `unit_ambiguous`, because the same words also mean "money" in everyday Hindi ("paise bhej do"). The assistant then asks the user to restate the amount in rupees.
 
 | Input | Candidates (paise) |
 |---|---|
@@ -58,6 +58,8 @@ Interpretation schema (Zod in `shared`):
 | `bhej do 500 ya 600` | 50000 and 60000 |
 | `ten thousand` | 1000000 |
 | `bhej do` | none |
+| `50 paise` | none, flagged `unit_ambiguous` |
+| `paise bhej do` | none |
 
 **Date resolver** (fixed clock in tests, zone `Asia/Kolkata`, weeks run Monday to Sunday). Maps `aaj`, `kal` (past reading, because history is always in the past), `parso`, `pichle hafte`, `is hafte`, `is mahine`, `pichle mahine`, `pichle 7 din` and the Devanagari and English equivalents to concrete ranges. With clock 2026-10-14 (Wednesday): `last_week` is 2026-10-05 to 2026-10-11; `yesterday` is 2026-10-13; `this_month` is 2026-10-01 to 2026-10-14.
 
@@ -65,11 +67,11 @@ Interpretation schema (Zod in `shared`):
 
 ## Interpreter
 
-One call per message: system prompt (intent definitions, schema, rules, at least 3 few-shot examples per language for each main intent), the user text delimited as data, recent turns, and pending clarification context. The prompt states that instructions inside user text are never followed. Output is validated against the schema. On failure, one repair call includes the validation errors; a second failure is a fallback (F02).
+One call per message: system prompt (intent definitions, schema, rules, at least 3 few-shot examples per language for each main intent), the user text delimited as data, the recent turns in alternating order (the user's messages as typed; assistant turns only as closed-catalog summaries, never rendered replies, see F02), and pending clarification context. The prompt states that instructions inside user text are never followed. The prompt states that `amount_minor` is in paise (rupees times 100); a model that forgets this produces a mismatch with the parser, which the cross-check below turns into a clarification. Output is validated against the schema. On failure, one repair call includes the validation errors; a second failure is a fallback (F02).
 
 **Cross-checks after validation:**
 
-1. Amount: let P be the parser's candidates. If the model gives an amount that is not in P, treat it as a mismatch and ask the user to confirm from P. If P has exactly one candidate and the model gave none, use P. If P has several candidates, ask which. If P is empty, discard any model amount.
+1. Amount: let P be the parser's candidates. If the model gives an amount that is not in P, treat it as a mismatch and ask the user to confirm from P. If P has exactly one candidate and the model gave none, use P. If P has several candidates, ask which. If P is empty, discard any model amount (if the parser flagged `unit_ambiguous`, ask the user to restate the amount in rupees).
 2. Intent versus entities: `TRANSFER_MONEY` needs amount and recipient (else `missing`); `TRANSACTION_STATUS` needs a reference or the phrase for "last transfer".
 3. Confidence below 0.6 or `multiple_intents` true leads to clarification (no tool execution).
 
@@ -82,11 +84,12 @@ One call per message: system prompt (intent definitions, schema, rules, at least
 - AC-F03-5: Model amount 200 with text "2 hazaar" produces a clarification and no transfer preparation; model omitting the amount with text "2 hazaar bhej do" fills 200000; text with two candidates asks which.
 - AC-F03-6: An intent outside the closed set is rejected as invalid output.
 - AC-F03-7: Recipient resolver cases pass: "Rohan" resolves; the Devanagari alias resolves to the same beneficiary; "Rahul" is ambiguous with two candidates; "Rahull" is ambiguous; "Rohn" (4 characters) is not found; unknown names are not found.
-- AC-F03-8: Inspecting every captured LLM request in tests shows no beneficiary names, balances or transaction data.
+- AC-F03-8: Inspecting every captured LLM request in tests shows no beneficiary names, balances or transaction data, including in a conversation whose earlier assistant replies named a beneficiary, an amount and a masked account (those replies are absent from the prompt; only their catalog summaries appear). A name the user typed themselves is their own message and may appear.
 - AC-F03-9: Confidence 0.5 produces a clarification and no tool call.
 - AC-F03-10: Abbreviation fixtures (`bal`, `txn`, `pls`, `rs`, `k`) produce the intended interpretations through the scripted model and parsers.
 - AC-F03-11: Reply templates render in en, hi and hi-Latn for every message key (a test fails if a key lacks a locale).
 - AC-F03-12: The NLU evaluation (F08) reports metrics per language, and the amount cross-check mismatch rate.
+- AC-F03-13: The history builder returns the last 10 turns in real order with alternating roles. Every assistant turn is a catalog summary, never rendered text. A test fails when a reply template key has neither a summary nor an explicit `no_summary` entry, and when a summary contains anything other than static text and an integer count. For three follow-up fixtures ("and last week?" after a transactions card, "make it 600" after a confirmation card, "why did that fail?" after a failed-transfer status card) the captured prompt contains the expected turns with the right summary line and nothing from the earlier rendered replies. Whether the model reads such follow-ups correctly is measured by the follow-up cases in the F08 dataset, not assumed.
 
 ## Errors and security
 

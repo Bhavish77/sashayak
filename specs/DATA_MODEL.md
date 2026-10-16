@@ -58,7 +58,7 @@ Status: DRAFT for approval. Revised 2026-10-15: one Postgres 16 server with **fi
 | Table | Columns | Constraints and notes |
 |---|---|---|
 | `conversations` | `id`, `user_id`, `title`, `locale`, `status` (open, closed), `created_at`, `last_message_at` | Index `(user_id, last_message_at desc)`. |
-| `messages` | `id`, `conversation_id`, `role` (user, assistant, system_notice), `content` (masked), `language` (en, hi, hi-Latn), `client_message_id` (null), `meta` jsonb (interpretation, policy decision, card types, tool outcomes, `transfer_id` for notices), `created_at` | Unique `(conversation_id, client_message_id)` where not null. Index `(conversation_id, created_at)`. `system_notice` rows are written by the event consumer (transfer outcome updates); partial unique index on `(meta->>'transfer_id', meta->>'to_status')` where `role = 'system_notice'` makes a notice idempotent per transfer and status. |
+| `messages` | `id`, `conversation_id`, `role` (user, assistant, system_notice), `content` (masked), `language` (en, hi, hi-Latn), `client_message_id` (null), `meta` jsonb (interpretation, policy decision, card types, tool outcomes, `template_key` of an assistant reply, `transfer_id` for notices), `created_at` | Unique `(conversation_id, client_message_id)` where not null. Index `(conversation_id, created_at)`. `system_notice` rows are written by the event consumer (transfer outcome updates); partial unique index on `(meta->>'transfer_id', meta->>'to_status')` where `role = 'system_notice'` makes a notice idempotent per transfer and status. |
 | `tool_invocations` | `id`, `message_id`, `tool`, `input` jsonb (masked), `outcome` (ok, denied, error), `error_code`, `latency_ms`, `created_at` | Feeds the admin inspector and tool metrics. |
 | `llm_calls` | `id`, `message_id` (null), `purpose` (interpret, repair, faq_answer, eval), `provider`, `model`, `prompt_masked`, `response_masked`, `tokens_in`, `tokens_out`, `latency_ms`, `outcome` (ok, invalid_output, timeout, error, circuit_open, overloaded), `validation_error`, `created_at` | Append-only. |
 | `kb_articles` | `id`, `slug`, `title`, `body`, `locale`, `tags` text[], `tsv` tsvector (generated) | GIN index on `tsv`. A small curated set (10 to 15 articles, en and Hinglish). |
@@ -91,7 +91,7 @@ Status: DRAFT for approval. Revised 2026-10-15: one Postgres 16 server with **fi
 
 | Key | Owner | Value | TTL |
 |---|---|---|---|
-| `assistant:dlg:{conversationId}` | `assistant` | JSON: `pendingClarification {intent, missing[], partialEntities, askedCount}`, `pendingTransferId`, `lastLocale` | 30 minutes, refreshed on activity |
+| `assistant:dlg:{conversationId}` | `assistant` | JSON: `pendingClarification {intent, slot, partialEntities, candidates, askedCount}` (`candidates` holds beneficiary ids only), `pendingTransferId`, `lastLocale` | 30 minutes, refreshed on activity |
 | `edge:rl:{scope}:{id}` and `assistant:rl:{scope}:{id}` | `edge`, `assistant` | token-bucket counters (ip, user, messages, tickets) | window length |
 | `edge:login:fail:{email}` and `edge:login:fail:ip:{ip}` | `edge` | failure counters and lockout flag | 15 minutes |
 | `{service}:cb:{target}` | each caller | circuit-breaker state (closed, open until timestamp, failure count) for `llm:{provider}`, `rail`, `wallet`, `transfers` | 5 minutes after last event |

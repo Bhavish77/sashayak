@@ -31,7 +31,7 @@ Exactly seven tools (F04, F05). No tool accepts a user id, role or principal. No
 ## Prompt-injection defenses (layered)
 
 1. The model's output is parsed against a closed schema; free text from the model is never executed or interpreted as commands.
-2. Data minimization: prompts contain the system prompt, the user's own recent messages, pending clarification context, and curated KB snippets for FAQs. Ledger rows, balances, beneficiaries and transaction notes are never included.
+2. Data minimization: prompts contain the system prompt, the user's own recent messages, one-line summaries of the assistant's earlier turns taken from a closed catalog (static text and an integer count only, F02), pending clarification context, and curated KB snippets for FAQs. Ledger rows, balances, beneficiaries and transaction notes are never included.
 3. User text and KB text are wrapped in clearly delimited data blocks, and the system prompt states that instructions inside them are not to be followed.
 4. The policy engine and registry above, so even a fully hijacked interpretation cannot reach a forbidden action.
 5. Confirmation outside the model (F05).

@@ -485,7 +485,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Depends on:** T03
 - **Covers:** FR-NLU-1, FR-NLU-3, FR-NLU-5, FR-NLU-6 (detection)
 - **Spec:** F03 (languages, amount parser, date resolver)
-- **Tests first:** AC-F03-1, 2, 3, 10 using the tables in F03 plus the extra cases; fuzz test that no parser throws on arbitrary strings; property test for amount formatting round trip; ambiguity returns all candidates.
+- **Tests first:** AC-F03-1, 2, 3, 10 using the tables in F03 plus the extra cases (including the `paise` rows: no candidate, flagged `unit_ambiguous`); fuzz test that no parser throws on arbitrary strings; property test for amount formatting round trip; ambiguity returns all candidates.
 - **Build:** `packages/assistant-core/nlu` modules: normalize, detect language, parse amounts, resolve dates (Asia/Kolkata, Monday weeks), abbreviation expansion, Hinglish word list.
 - **Done when:** the criteria pass; modules are pure and take a `Clock`.
 - **Verify:** `pnpm test:unit`.
@@ -496,9 +496,9 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Depends on:** T37
 - **Covers:** FR-NLU-8
 - **Spec:** F03 recipient resolver
-- **Tests first:** AC-F03-7 cases (Rohan, Devanagari alias, Rahul ambiguous, Rahull, Rohn too short, unknown); honorific stripping; tier ordering; the resolver only sees the beneficiary list handed to it, so it can never return data about other users.
-- **Build:** pure resolver in `assistant-core` over the list returned by a `BeneficiaryDirectory` port, with an in-memory directory for tests (the `wallet`-backed adapter is built in T42).
-- **Done when:** AC-F03-7 passes.
+- **Tests first:** AC-F03-7 cases (Rohan, Devanagari alias, Rahul ambiguous, Rahull, Rohn too short, unknown); honorific stripping; tier ordering; the resolver only sees the beneficiary list handed to it, so it can never return data about other users; slot-answer cases from AC-F02-20 at unit level with no model dependency ("the second one", "2", "doosra", "दूसरा", "ending 5678", "Verma", "Sharma", "3", "Rahul", an unrelated sentence).
+- **Build:** pure resolver in `assistant-core` over the list returned by a `BeneficiaryDirectory` port, with an in-memory directory for tests (the `wallet`-backed adapter is built in T42), and the pure slot-answer handler of F02 (position words in en, hi and hi-Latn, last four digits, a name narrowed to one of the offered candidates, an amount-only reply, a message that is not an answer), which uses no model.
+- **Done when:** AC-F03-7 passes and the handler cases of AC-F02-20 pass (ordinals, last digits, name within candidates, ask again on zero or several matches, a non-answer is reported as such).
 - **Verify:** `pnpm test:unit`.
 - **Evidence:**
 
@@ -518,8 +518,8 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Depends on:** T37, T39
 - **Covers:** FR-NLU-2, FR-NLU-3, FR-NLU-4, FR-NLU-5, FR-NLU-7, FR-SEC-2 (prompt side)
 - **Spec:** F03 interpreter and cross-checks; ADR-004
-- **Tests first:** AC-F03-4, 5, 6, 9; low confidence and multiple-intent handling; prompts contain only allowed context (AC-F03-8 via request capture); delimiters around user text; few-shot examples present per language.
-- **Build:** prompt builder, structured-output call with Zod validation, one repair call, cross-check module, interpretation result type with `needs` and `reason`.
+- **Tests first:** AC-F03-4, 5, 6, 9; low confidence and multiple-intent handling; prompts contain only allowed context (AC-F03-8 via request capture, including a conversation whose earlier assistant replies named a beneficiary: those replies must not appear in the prompt, only their catalog summaries); AC-F03-13 (history builder: alternating order, closed-catalog summaries, completeness and no-interpolation tests, three follow-up fixtures); delimiters around user text; few-shot examples present per language.
+- **Build:** prompt builder and history builder (turn summaries from a closed catalog in `assistant-core`), structured-output call with Zod validation, one repair call, cross-check module, interpretation result type with `needs` and `reason`.
 - **Done when:** the criteria pass using only the scripted LLM; no network used.
 - **Verify:** `pnpm test:unit`.
 - **Evidence:**
@@ -562,8 +562,8 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Depends on:** T09, T27, T40, T41, T42, T43
 - **Covers:** FR-CONV-3, FR-CONV-4, FR-CONV-5, FR-CONV-7, FR-XFER-3 (typed channel), FR-XFER-9, NFR-PERF-2
 - **Spec:** F02; F05 behavior 3 (typed); ARCHITECTURE section 5
-- **Tests first:** AC-F02-4, 5, 6, 8, 10, 11, 12, 13; the `overloaded` fallback reason in the fallback decision table (AC-F02-14); AC-F05-14 (the lexicon matches exact phrases only, with zero LLM calls; "haan lekin 800 bhejo" is processed as a new request; a bare "haan" with nothing pending gets a clarifying template); typed confirm calls the internal `confirm-typed` route (fake `transfers`) and, when a PIN is required, the reply tells the user to use the button; typed cancel uses the public cancel route as the user; a failed prepare creates nothing and says so; fallback decision table; clarification counter; `PROVIDE_SLOT` continuation; per-turn tool cap; benchmark for turn overhead.
-- **Build:** `assistant-core/pipeline` with ports, dialog state transitions, typed-confirm handler, fallback logic, responder, persistence of messages, tool invocations and `llm_calls` links, audit events (`assistant.action`, `policy.denied`, `output_guard.blocked`) through the outbox in the same transaction as the records they describe (AC-F02-11).
+- **Tests first:** AC-F02-4, 5, 6, 8, 10, 11, 12, 13, 20 (through the pipeline: the model is called once for the first message and not for the answer); the `overloaded` fallback reason in the fallback decision table (AC-F02-14); AC-F05-14 (the lexicon matches exact phrases only, with zero LLM calls; "haan lekin 800 bhejo" is processed as a new request; a bare "haan" with nothing pending gets a clarifying template); typed confirm calls the internal `confirm-typed` route (fake `transfers`) and, when a PIN is required, the reply tells the user to use the button; typed cancel uses the public cancel route as the user; a failed prepare creates nothing and says so; fallback decision table; clarification counter; slot-answer continuation (drop the pending clarification when the message is not an answer); per-turn tool cap; benchmark for turn overhead.
+- **Build:** `assistant-core/pipeline` with ports, dialog state transitions, typed-confirm handler, fallback logic, responder, persistence of messages (each assistant reply stores its `template_key` in `meta`), tool invocations and `llm_calls` links, audit events (`assistant.action`, `policy.denied`, `output_guard.blocked`) through the outbox in the same transaction as the records they describe (AC-F02-11).
 - **Done when:** the listed criteria pass with the scripted LLM through the pipeline function (HTTP comes next).
 - **Verify:** `pnpm test:unit`, `pnpm test:int`.
 - **Evidence:**
@@ -663,7 +663,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Covers:** FR-EVAL-1, FR-EVAL-2 (metric code)
 - **Spec:** F08
 - **Tests first:** AC-F08-1, 2, 4 (validator mutation tests, composition minimums, metric math against hand-computed fixtures including Wilson interval and percentiles).
-- **Build:** author the 240-plus case dataset (realistic phrasing, balanced as F08 specifies, manifest with version and authorship note), validator CLI, metrics library.
+- **Build:** author the 240-plus case dataset (realistic phrasing, balanced as F08 specifies, including at least 20 follow-up cases with a `history`, manifest with version and authorship note), validator CLI, metrics library.
 - **Done when:** the dataset check passes; the report states the case counts per group.
 - **Verify:** `pnpm test:unit`, `pnpm eval:check`.
 - **Evidence:**
