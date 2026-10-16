@@ -11,13 +11,18 @@
  *  - no grouping at all: any number of digits ("500", "1234567")
  *  - Western: first group 1-3 digits, then every later group exactly 3
  *    digits ("1,000", "1,234,567")
- *  - Indian: first group 1-3 digits, then any number of 2-digit groups,
- *    then a final group of exactly 3 digits ("1,00,000", "12,34,567")
+ *  - Indian: first group 1-2 digits, then any number of 2-digit groups,
+ *    then a final group of exactly 3 digits ("1,00,000", "12,34,567").
+ *    The leading group is 1-2 digits, not 1-3: once 2-digit groups
+ *    follow, a 3-digit leading group ("123,45,678") is not valid Indian
+ *    grouping either — a 3-digit leading group is only ever valid under
+ *    the Western shape above, which requires every later group to be
+ *    exactly 3 digits too.
  * A previous looser pattern let commas land almost anywhere (so
  * "1234,56" silently parsed as 123456 rupees instead of being rejected —
  * a 100x misread of real money).
  */
-const RUPEES_INPUT_PATTERN = /^(\d+|\d{1,3}(,\d{3})+|\d{1,3}(,\d{2})*,\d{3})(\.\d{1,2})?$/;
+const RUPEES_INPUT_PATTERN = /^(\d+|\d{1,3}(,\d{3})+|\d{1,2}(,\d{2})*,\d{3})(\.\d{1,2})?$/;
 
 export function parseRupeesToMinor(input: string): number {
   const withoutCommas = input.replace(/,/g, '');

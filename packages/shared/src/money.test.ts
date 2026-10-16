@@ -14,10 +14,17 @@ describe('parseRupeesToMinor', () => {
     ['1,000', 100000],
     ['1,234,567', 123456700],
     ['1,234,567.89', 123456789],
-    // Indian grouping: first group 1-3 digits, then any number of 2-digit
-    // groups, then a final group of exactly 3 digits.
+    ['123,456', 12345600],
+    // Indian grouping: first group 1-2 digits, then any number of 2-digit
+    // groups, then a final group of exactly 3 digits. The first group is
+    // 1-2 digits (not 1-3) so that once 2-digit groups follow, a 3-digit
+    // leading group ("123,45,678") is never mistaken for valid Indian
+    // grouping — it's only ever valid Western grouping, and Western
+    // requires every later group to be exactly 3 digits too.
     ['12,34,567', 123456700],
     ['12,34,567.89', 123456789],
+    ['1,23,456', 12345600],
+    ['1,23,45,678', 1234567800],
   ])('parses "%s" to %i paise', (input, expected) => {
     expect(parseRupeesToMinor(input)).toBe(expected);
   });
@@ -31,6 +38,16 @@ describe('parseRupeesToMinor', () => {
   // 123456 rupees instead of being rejected outright.
   it.each([['1234,56'], ['100,00'], ['12,34'], ['1,23,4567'], ['1,2345'], ['12,3456'], ['1,2,3']])(
     'rejects malformed digit grouping in "%s"',
+    (input) => {
+      expect(() => parseRupeesToMinor(input)).toThrow();
+    },
+  );
+
+  // Regression: a 3-digit leading group followed by 2-digit groups used to
+  // be accepted as Indian grouping ("123,45,678"), which isn't a real
+  // digit-grouping convention in either system.
+  it.each([['123,45,678'], ['123,45,67,890']])(
+    'rejects a 3-digit leading group before 2-digit groups in "%s"',
     (input) => {
       expect(() => parseRupeesToMinor(input)).toThrow();
     },
