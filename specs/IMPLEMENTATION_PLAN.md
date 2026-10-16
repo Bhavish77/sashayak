@@ -88,7 +88,7 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
   **Update (2026-10-16, cont.):** tightened the Indian alternative's leading group from `\d{1,3}` to `\d{1,2}` ("123,45,678" was still wrongly accepted); tests written first, only the two reject cases were red, all previously-passing and newly-required accept cases stayed green; re-ran and passed `pnpm lint`, `pnpm typecheck` (12/12), `pnpm arch` (0 violations), `pnpm test:unit` (26 files, 156/156 tests).
 
 ### T04. Service contracts, events and canonical JSON
-- [ ] Done
+- [x] Done
 - **Depends on:** T03
 - **Covers:** FR-SVC-4, NFR-ARCH-2 (schemas and fakes), NFR-ARCH-3 (access matrix data), NFR-MAINT-3 (base)
 - **Spec:** API; INTERNAL_API; EVENTS; F10 (contracts); F07 (canonicalization); ADR-017, ADR-018
@@ -96,7 +96,8 @@ Review points (phase checkpoints) after T12, T18, T22, T36, T47, T51, T54 and T5
 - **Build:** in `packages/shared`: a route registry that holds method, path, roles or caller list, request and response schemas for public routes (initially the auth, wallet, transfers routes in `API.md`) and internal routes (`INTERNAL_API.md`); event envelope and payload schemas with committed snapshots under `events/__snapshots__`; `service-acl` access matrix as data; canonical JSON function with vectors; helpers that generate a typed client and an in-memory fake from a registered route.
 - **Done when:** the tests pass; adding a route to the registry without schemas fails typecheck.
 - **Verify:** `pnpm --filter @sahayak/shared test:unit`, `pnpm test:contract` (shared part).
-- **Evidence:**
+- **Evidence:** All ran and passed on 2026-10-16: `pnpm --filter @sahayak/shared test:unit` (22 files, 225/225 tests); `pnpm test:contract` (now a real script scoped to `events/`, `routes/` and `service-acl.test.ts`: 8 files, 65/65 tests); `pnpm lint` (clean); `pnpm typecheck` (12/12); `pnpm arch` (69 modules, 144 deps, 0 violations); full-repo `pnpm test:unit` (36 files, 243/243 tests); `pnpm install --frozen-lockfile` (pass). `events/envelope.ts` was written before its test (one generic factory, flagged in the task report); everything else was test-first with a confirmed red. Conversation, support and admin public routes are out of scope for this task (land with the features that build them).
+- **Evidence (addendum):** `pnpm test:contract` only covers the shared-package contract proofs so far (event schemas, route registry/fakes, access-matrix cross-check); per-service provider/consumer tests, OpenAPI drift and the rail contract extend this script in later tasks (T07, T21, and each service task).
 
 ### T05. Redaction and masking library
 - [ ] Done
