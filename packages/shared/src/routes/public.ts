@@ -87,9 +87,7 @@ export const publicRoutes = {
     response: userSummarySchema,
   }),
 
-  // NOTE: API.md does not state PATCH /v1/me's response explicitly. Modeled
-  // as no body (204), consistent with PUT /v1/me/pin's explicit 204 — an
-  // assumption to confirm when edge's routes are actually built (T13).
+  // API.md: "Returns 204" — no response body, same as PUT /v1/me/pin.
   'me.update': definePublicRoute({
     method: 'PATCH',
     path: '/v1/me',
