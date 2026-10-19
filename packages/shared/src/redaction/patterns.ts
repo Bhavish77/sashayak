@@ -50,6 +50,34 @@ export const PHONE = new RegExp(
  */
 export const CARD_CANDIDATE = /\b\d{4}([ -])\d{4}\1\d{4}\1\d{4}\b|\b\d{13,19}\b/g;
 
+const DEVANAGARI_DIGIT_ZERO = 0x0966;
+const FULLWIDTH_DIGIT_ZERO = 0xff10;
+
+/**
+ * Converts Devanagari digits (U+0966-U+096F) and fullwidth digits
+ * (U+FF10-U+FF19) to plain ASCII 0-9, leaving every other character —
+ * including Devanagari script itself — untouched. redactText runs this
+ * first so a phone or account number typed in Devanagari digits is seen
+ * and redacted, not missed because the patterns above only know ASCII
+ * digits. This is local to redaction: the assistant's amount parser (F06)
+ * reads the raw, un-redacted message, so it needs its own digit
+ * normalization and cannot rely on this one having already run.
+ */
+export function normalizeDigits(input: string): string {
+  let result = '';
+  for (const char of input) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code >= DEVANAGARI_DIGIT_ZERO && code <= DEVANAGARI_DIGIT_ZERO + 9) {
+      result += String(code - DEVANAGARI_DIGIT_ZERO);
+    } else if (code >= FULLWIDTH_DIGIT_ZERO && code <= FULLWIDTH_DIGIT_ZERO + 9) {
+      result += String(code - FULLWIDTH_DIGIT_ZERO);
+    } else {
+      result += char;
+    }
+  }
+  return result;
+}
+
 /** A 9-18 digit run, optionally preceded by a currency marker captured for the caller to check. */
 export const ACCOUNT_WITH_OPTIONAL_CURRENCY_PREFIX = /(₹|Rs\.?[ ]?|INR[ ]?)?\b(\d{9,18})\b/g;
 

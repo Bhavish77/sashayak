@@ -5,6 +5,7 @@ import {
   EMAIL,
   IFSC_LIKE,
   isLuhnValid,
+  normalizeDigits,
   PAN_LIKE,
   PHONE,
   UPI_LIKE,
@@ -22,7 +23,7 @@ import {
  * that case.
  */
 export function redactText(input: string): string {
-  let result = input;
+  let result = normalizeDigits(input);
   result = result.replace(PAN_LIKE, '[PAN]');
   result = result.replace(IFSC_LIKE, '[IFSC]');
   result = result.replace(EMAIL, '[EMAIL]');

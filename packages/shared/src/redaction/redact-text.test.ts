@@ -216,6 +216,24 @@ describe('redactText: UPI-like handles (F06)', () => {
   });
 });
 
+describe('redactText: Devanagari and fullwidth digits (F06)', () => {
+  it('redacts a phone number typed in Devanagari digits', () => {
+    const result = redactText('मेरा नंबर ९८७६५४३२१० है');
+    expect(result).toBe('मेरा नंबर [PHONE] है');
+  });
+
+  it('normalizes Devanagari digits in an amount without redacting it (amounts are never redacted)', () => {
+    const result = redactText('total is ₹२,००० due');
+    expect(result).toBe('total is ₹2,000 due');
+  });
+
+  it('redacts a phone number typed in fullwidth digits', () => {
+    const result = redactText('call me on ９８７６５４３２１０ today');
+    expect(result).toContain('[PHONE]');
+    expect(result).not.toContain('987654321');
+  });
+});
+
 describe('redactText: grouped-number negative cases survive untouched (F06)', () => {
   it.each([['₹98,765'], ['₹1,23,456'], ['Rs 500 to 600'], ['19-10-2026'], ['send 2000 3000']])(
     'leaves "%s" completely unchanged',
