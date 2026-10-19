@@ -8,3 +8,4 @@ export * from './logging/memory-sink';
 export * from './logging/logger';
 export * from './http/errors';
 export * from './http/app';
+export * from './http/register-route';
