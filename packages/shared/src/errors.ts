@@ -63,6 +63,7 @@ const fieldErrorSchema = z
     message: z.string(),
   })
   .strict();
+export type FieldError = z.infer<typeof fieldErrorSchema>;
 
 export const problemJsonSchema = z
   .object({
@@ -76,3 +77,43 @@ export const problemJsonSchema = z
   })
   .strict();
 export type ProblemJson = z.infer<typeof problemJsonSchema>;
+
+/** The `type` URL API.md's examples use: the code, kebab-cased, under one fixed path. */
+export function errorTypeUrl(code: ErrorCode): string {
+  const kebab = code.toLowerCase().replaceAll('_', '-');
+  return `https://sahayak.dev/errors/${kebab}`;
+}
+
+/**
+ * The one way application code signals a known, named failure
+ * (`API.md`'s error table) instead of throwing a bare `Error` — so a
+ * route handler can `throw new AppError('INSUFFICIENT_FUNDS', '...')`
+ * and the service skeleton's error handler (`platform`, T07) turns it
+ * into the exact problem+json body `API.md` specifies, without the
+ * handler needing to know the HTTP status or the `type` URL itself.
+ */
+export class AppError extends Error {
+  readonly code: ErrorCode;
+  readonly detail: string;
+  readonly fieldErrors: FieldError[];
+
+  constructor(code: ErrorCode, detail: string, fieldErrors: FieldError[] = []) {
+    super(detail);
+    this.name = 'AppError';
+    this.code = code;
+    this.detail = detail;
+    this.fieldErrors = fieldErrors;
+  }
+
+  toProblemJson(requestId: string): ProblemJson {
+    return {
+      type: errorTypeUrl(this.code),
+      title: errorTable[this.code].title,
+      status: errorTable[this.code].status,
+      code: this.code,
+      detail: this.detail,
+      request_id: requestId,
+      errors: this.fieldErrors,
+    };
+  }
+}

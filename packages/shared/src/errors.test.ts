@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorCodes, errorTable, problemJsonSchema } from './errors';
+import { AppError, errorCodes, errorTable, errorTypeUrl, problemJsonSchema } from './errors';
 
 describe('errorTable', () => {
   it('has exactly the public codes from API.md and internal codes from INTERNAL_API.md', () => {
@@ -111,5 +111,46 @@ describe('problemJsonSchema', () => {
         extra: 'nope',
       }),
     ).toThrow();
+  });
+});
+
+describe('errorTypeUrl', () => {
+  it('matches the API.md example for INSUFFICIENT_FUNDS', () => {
+    expect(errorTypeUrl('INSUFFICIENT_FUNDS')).toBe(
+      'https://sahayak.dev/errors/insufficient-funds',
+    );
+  });
+
+  it('kebab-cases every code into a valid URL', () => {
+    for (const code of errorCodes) {
+      expect(() => new URL(errorTypeUrl(code))).not.toThrow();
+    }
+  });
+});
+
+describe('AppError', () => {
+  it('carries the code, a detail message and no field errors by default', () => {
+    const error = new AppError('NOT_FOUND', 'Transfer not found');
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBe('NOT_FOUND');
+    expect(error.detail).toBe('Transfer not found');
+    expect(error.message).toBe('Transfer not found');
+    expect(error.fieldErrors).toEqual([]);
+  });
+
+  it('carries field errors for a validation failure', () => {
+    const error = new AppError('VALIDATION_FAILED', 'One or more fields are invalid.', [
+      { path: 'amount_minor', message: 'must be at least 100' },
+    ]);
+    expect(error.fieldErrors).toEqual([{ path: 'amount_minor', message: 'must be at least 100' }]);
+  });
+
+  it('builds a problem+json body that passes problemJsonSchema', () => {
+    const error = new AppError('INSUFFICIENT_FUNDS', 'Available balance is lower than the total.');
+    const body = error.toProblemJson('req-1');
+    expect(problemJsonSchema.parse(body)).toEqual(body);
+    expect(body.status).toBe(422);
+    expect(body.code).toBe('INSUFFICIENT_FUNDS');
+    expect(body.request_id).toBe('req-1');
   });
 });

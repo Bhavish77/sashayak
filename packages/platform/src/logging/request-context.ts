@@ -26,3 +26,17 @@ export function runWithRequestContext<T>(context: RequestContext, fn: () => T): 
 export function getRequestContext(): RequestContext | undefined {
   return storage.getStore();
 }
+
+/**
+ * Sets `context` for the rest of the current async chain, with no
+ * wrapping callback. A web framework's request lifecycle is a sequence
+ * of separate hook invocations, not one function whose call tree spans
+ * the whole request, so there is no single place to pass to
+ * `runWithRequestContext`; the framework's earliest hook calls this once
+ * per request instead, and the context then reaches every later hook
+ * and the handler, the same way `runWithRequestContext` reaches
+ * everything nested inside it.
+ */
+export function enterRequestContext(context: RequestContext): void {
+  storage.enterWith(context);
+}
