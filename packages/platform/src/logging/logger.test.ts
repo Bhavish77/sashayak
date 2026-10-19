@@ -108,6 +108,14 @@ function makePoisonedObject(): Record<string, unknown> {
   return poisoned;
 }
 
+function errorFieldsOf(record: Record<string, unknown>): {
+  name: string;
+  message: string;
+  stack: string;
+} {
+  return record.err as { name: string; message: string; stack: string };
+}
+
 const callStyles: CallStyleCase[] = [
   {
     name: '1. message only',
@@ -128,6 +136,27 @@ const callStyles: CallStyleCase[] = [
   {
     name: '5. child binding',
     run: (logger) => logger.child({ phone: PHONE }).info('hello'),
+  },
+  {
+    name: '6. error under err (keeps name, redacted message, non-empty redacted stack)',
+    run: (logger) => logger.error({ err: new Error(`boom ${PHONE}`) }, 'failed'),
+    extra: (sink) => {
+      const err = errorFieldsOf(firstRecord(sink));
+      expect(err.name).toBe('Error');
+      expect(err.message).toContain('[PHONE]');
+      expect(err.stack.length).toBeGreaterThan(0);
+      expect(err.stack).not.toContain(PHONE);
+    },
+  },
+  {
+    name: '7. Error as first argument',
+    run: (logger) => logger.error(new Error(`boom ${PHONE}`)),
+    extra: (sink) => {
+      const err = errorFieldsOf(firstRecord(sink));
+      expect(err.name).toBe('Error');
+      expect(err.message).toContain('[PHONE]');
+      expect(err.stack.length).toBeGreaterThan(0);
+    },
   },
   {
     name: '8. unredactable merge object (throwing getter) yields redaction_failed, no garbage keys',

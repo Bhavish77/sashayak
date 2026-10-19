@@ -10,18 +10,42 @@ export interface CreateLoggerOptions {
   destination?: { write(chunk: string): boolean };
 }
 
+/** Turns an Error into the shape a log line keeps: name, a redacted message, a redacted stack. */
+function redactError(error: Error): { name: string; message: string; stack: string } {
+  return {
+    name: error.name,
+    message: redactText(error.message),
+    stack: redactText(error.stack ?? ''),
+  };
+}
+
 /**
- * Redacts a plain merge object. Returns the string `redactObject` would
- * return on failure (currently `'[REDACTION_FAILED]'`) unchanged, so the
- * caller can detect it — never an object, so the caller never spreads a
- * string into character-indexed garbage keys.
+ * Redacts a plain merge object, then restores a full (name, message, stack)
+ * shape for an Error found under `err` or `error` — `redactObject` alone
+ * would collapse it to `{ name, message }` (AC-F06-14's own contract,
+ * unchanged), losing the stack a log line needs to diagnose a failure.
+ *
+ * Returns the string `redactObject` would return on failure (currently
+ * `'[REDACTION_FAILED]'`) unchanged, so the caller can detect it — never
+ * an object, so the caller never spreads a string into character-indexed
+ * garbage keys.
  */
 function redactMergeObject(value: Record<string, unknown>): Record<string, unknown> | string {
   const redacted = redactObject(value);
   if (typeof redacted !== 'object' || redacted === null || Array.isArray(redacted)) {
     return redacted as string;
   }
-  return redacted as Record<string, unknown>;
+  const result = { ...(redacted as Record<string, unknown>) };
+  for (const key of ['err', 'error'] as const) {
+    const original = value[key];
+    if (original instanceof Error) {
+      if (key !== 'err') {
+        delete result[key];
+      }
+      result.err = redactError(original);
+    }
+  }
+  return result;
 }
 
 /** Redacts one trailing (printf or plain) argument: strings and objects only — other primitives carry no text to leak. */
@@ -60,9 +84,9 @@ function withRedactingChild<Logger extends pino.Logger>(logger: Logger): Logger 
  * lines with `service`, the current request id and trace id (read from
  * AsyncLocalStorage, never passed by the caller), and the F06 redaction
  * serializer applied to every part of every call — the message, printf
- * values, the merge object and child-logger bindings — so a call site
- * cannot forget to redact one of them, because the logger does it for
- * every call, not just the ones a developer remembered to guard.
+ * values, the merge object, child-logger bindings, and errors — so a
+ * call site cannot forget to redact one of them, because the logger does
+ * it for every call, not just the ones a developer remembered to guard.
  */
 export function createLogger(options: CreateLoggerOptions): pino.Logger {
   const logger = pino(
@@ -100,6 +124,11 @@ export function createLogger(options: CreateLoggerOptions): pino.Logger {
               redactText(first),
               ...redactedRest,
             ] as Parameters<typeof method>);
+          }
+
+          if (first instanceof Error) {
+            const mergeObject = { ...contextFields, err: redactError(first) };
+            return method.apply(this, [mergeObject, ...redactedRest] as Parameters<typeof method>);
           }
 
           if (Array.isArray(first) || first instanceof Date) {
