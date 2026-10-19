@@ -20,3 +20,4 @@ export * from './events/shape-snapshot';
 export * from './routes/registry';
 export * from './routes/internal';
 export * from './routes/public';
+export * from './redaction';

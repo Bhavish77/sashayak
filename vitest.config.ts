@@ -12,10 +12,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text'],
-      // Per-module 90% branch gates (NFR-MAINT-2) are added as each module
-      // lands: redaction (T05), audit (T17-T18), ledger (T19), idempotency
-      // (T25), policy (T41). Nothing money-related exists yet, so no
-      // threshold is enforced in T01/T02.
+      // Per-module 90% branch gates (NFR-MAINT-2), added as each module
+      // lands: redaction (T05, below), audit (T17-T18), ledger (T19),
+      // idempotency (T25), policy (T41).
+      thresholds: {
+        'packages/shared/src/redaction/**': {
+          branches: 90,
+        },
+      },
     },
   },
 });
