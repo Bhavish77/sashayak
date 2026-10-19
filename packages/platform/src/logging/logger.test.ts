@@ -1,3 +1,4 @@
+import type pino from 'pino';
 import { describe, expect, it } from 'vitest';
 import { createLogger } from './logger';
 import { createMemorySink, type MemorySink } from './memory-sink';
@@ -85,5 +86,83 @@ describe('createLogger (F06, F09)', () => {
     const circular: Record<string, unknown> = { a: 1 };
     circular.self = circular;
     expect(() => logger.info(circular, 'circular')).not.toThrow();
+  });
+});
+
+const PHONE = '9876543210';
+
+interface CallStyleCase {
+  name: string;
+  run: (logger: pino.Logger) => void;
+  extra?: (sink: MemorySink) => void;
+}
+
+function makePoisonedObject(): Record<string, unknown> {
+  const poisoned: Record<string, unknown> = {};
+  Object.defineProperty(poisoned, 'bad', {
+    enumerable: true,
+    get() {
+      throw new Error('boom');
+    },
+  });
+  return poisoned;
+}
+
+const callStyles: CallStyleCase[] = [
+  {
+    name: '1. message only',
+    run: (logger) => logger.info(`to ${PHONE}`),
+  },
+  {
+    name: '2. printf value',
+    run: (logger) => logger.info('sent to %s', PHONE),
+  },
+  {
+    name: '3. object + message',
+    run: (logger) => logger.error({ route: 'x' }, `failed for ${PHONE}`),
+  },
+  {
+    name: '4. object + printf',
+    run: (logger) => logger.info({ a: 1 }, 'hi %s', PHONE),
+  },
+  {
+    name: '5. child binding',
+    run: (logger) => logger.child({ phone: PHONE }).info('hello'),
+  },
+  {
+    name: '8. unredactable merge object (throwing getter) yields redaction_failed, no garbage keys',
+    run: (logger) => logger.error(makePoisonedObject(), `note ${PHONE}`),
+    extra: (sink) => {
+      const record = firstRecord(sink);
+      expect(record.redaction_failed).toBe(true);
+      expect(record).not.toHaveProperty('0');
+      expect(record).not.toHaveProperty('1');
+      expect(record.msg).toContain('[PHONE]');
+    },
+  },
+  {
+    name: '9. array as first argument (wrapped under data, no spread index keys)',
+    run: (logger) => logger.info([PHONE, 'note']),
+    extra: (sink) => {
+      const record = firstRecord(sink);
+      expect(record).not.toHaveProperty('0');
+      expect(record).not.toHaveProperty('1');
+      expect(record.data).toEqual(['[PHONE]', 'note']);
+    },
+  },
+];
+
+describe.each(callStyles)('createLogger: redacts every call style — $name (AC-F06-15)', (style) => {
+  it('removes the phone number from the whole logged line and keeps request/trace id', () => {
+    const sink = createMemorySink();
+    const logger = createLogger({ serviceName: 'edge', destination: sink.stream });
+    runWithRequestContext({ requestId: 'req-table', traceId: 'trace-table' }, () => {
+      style.run(logger);
+    });
+    const record = firstRecord(sink);
+    expect(JSON.stringify(record)).not.toContain(PHONE);
+    expect(record.request_id).toBe('req-table');
+    expect(record.trace_id).toBe('trace-table');
+    style.extra?.(sink);
   });
 });

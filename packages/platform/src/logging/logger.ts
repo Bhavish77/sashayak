@@ -11,15 +11,61 @@ export interface CreateLoggerOptions {
 }
 
 /**
- * Every service's logger (ARCHITECTURE section 9, F09): JSON lines with
- * `service`, the current request id and trace id (read from
+ * Redacts a plain merge object. Returns the string `redactObject` would
+ * return on failure (currently `'[REDACTION_FAILED]'`) unchanged, so the
+ * caller can detect it — never an object, so the caller never spreads a
+ * string into character-indexed garbage keys.
+ */
+function redactMergeObject(value: Record<string, unknown>): Record<string, unknown> | string {
+  const redacted = redactObject(value);
+  if (typeof redacted !== 'object' || redacted === null || Array.isArray(redacted)) {
+    return redacted as string;
+  }
+  return redacted as Record<string, unknown>;
+}
+
+/** Redacts one trailing (printf or plain) argument: strings and objects only — other primitives carry no text to leak. */
+function redactArgument(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return redactText(value);
+  }
+  if (value !== null && typeof value === 'object') {
+    return redactObject(value);
+  }
+  return value;
+}
+
+/**
+ * Wraps `.child()` so a child logger's own bound fields
+ * (`logger.child({ phone: '...' })`) are redacted before pino stores
+ * them. `formatters.bindings` looks like the documented hook for this,
+ * but pino deliberately skips it for a `child(bindings)` call made
+ * without a second `options` argument (an internal fast path —
+ * `resetChildingsFormatter` in pino's `proto.js`), which is the common
+ * call shape, so that hook alone misses exactly this case. Wrapping
+ * `.child` here instead works regardless of that internal optimization,
+ * and wraps every further-nested child the same way.
+ */
+function withRedactingChild<Logger extends pino.Logger>(logger: Logger): Logger {
+  const originalChild = logger.child.bind(logger);
+  logger.child = ((bindings: Record<string, unknown>, childOptions?: pino.ChildLoggerOptions) => {
+    const redactedBindings = redactObject(bindings) as Record<string, unknown>;
+    return withRedactingChild(originalChild(redactedBindings, childOptions));
+  }) as unknown as Logger['child'];
+  return logger;
+}
+
+/**
+ * Every service's logger (ARCHITECTURE section 9, F09, AC-F06-15): JSON
+ * lines with `service`, the current request id and trace id (read from
  * AsyncLocalStorage, never passed by the caller), and the F06 redaction
- * serializer applied to every merge object and every plain message — so
- * a call site cannot forget to redact, because the logger does it for
+ * serializer applied to every part of every call — the message, printf
+ * values, the merge object and child-logger bindings — so a call site
+ * cannot forget to redact one of them, because the logger does it for
  * every call, not just the ones a developer remembered to guard.
  */
 export function createLogger(options: CreateLoggerOptions): pino.Logger {
-  return pino(
+  const logger = pino(
     {
       level: options.level ?? 'info',
       base: { service: options.serviceName },
@@ -40,21 +86,43 @@ export function createLogger(options: CreateLoggerOptions): pino.Logger {
                 ...(context.traceId ? { trace_id: context.traceId } : {}),
               }
             : {};
+          const redactedRest = rest.map(redactArgument);
 
-          if (typeof first === 'string') {
-            return method.apply(this, [contextFields, redactText(first), ...rest] as Parameters<
+          if (first === undefined) {
+            return method.apply(this, [contextFields, ...redactedRest] as Parameters<
               typeof method
             >);
           }
 
-          const mergeObject = {
-            ...(redactObject(first) as Record<string, unknown>),
-            ...contextFields,
-          };
-          return method.apply(this, [mergeObject, ...rest] as Parameters<typeof method>);
+          if (typeof first === 'string') {
+            return method.apply(this, [
+              contextFields,
+              redactText(first),
+              ...redactedRest,
+            ] as Parameters<typeof method>);
+          }
+
+          if (Array.isArray(first) || first instanceof Date) {
+            const mergeObject = { ...contextFields, data: redactObject(first) };
+            return method.apply(this, [mergeObject, ...redactedRest] as Parameters<typeof method>);
+          }
+
+          if (first !== null && typeof first === 'object') {
+            const redacted = redactMergeObject(first as Record<string, unknown>);
+            const mergeObject =
+              typeof redacted === 'string'
+                ? { ...contextFields, redaction_failed: true }
+                : { ...redacted, ...contextFields };
+            return method.apply(this, [mergeObject, ...redactedRest] as Parameters<typeof method>);
+          }
+
+          // number, boolean, bigint, null, symbol: nothing to redact.
+          const mergeObject = { ...contextFields, data: first };
+          return method.apply(this, [mergeObject, ...redactedRest] as Parameters<typeof method>);
         },
       },
     },
     options.destination,
   );
+  return withRedactingChild(logger);
 }
