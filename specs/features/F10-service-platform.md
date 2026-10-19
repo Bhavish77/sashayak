@@ -12,7 +12,7 @@ The kit contains **no business rules**. Anything that mentions a wallet, transfe
 
 | Capability | Behavior |
 |---|---|
-| Service skeleton | One function builds a Fastify app with request-id and `traceparent` handling, JSON logging, error mapping to `application/problem+json`, body and timeout limits, security headers, graceful shutdown (drain within 30 s) and two listeners: public (`PORT`) and internal (`INTERNAL_PORT`). `SERVICE_ROLES` selects `api`, `worker` or both. |
+| Service skeleton | One function builds a Fastify app with request-id and `traceparent` handling, JSON logging, error mapping to `application/problem+json`, body and timeout limits, security headers, graceful shutdown (drain within 30 s) and two listeners: public (`PORT`) and internal (`INTERNAL_PORT`). `SERVICE_ROLES` selects `api`, `worker` or both. **Request assembly:** path parameters, query and body are merged into one object for validation; a key present in more than one of them is rejected with `VALIDATION_FAILED` (never resolved by precedence), and keys the route's schema does not list are rejected. |
 | Configuration | A Zod schema per service on top of a common base; startup exits non-zero naming the variable (never the value). Key material is validated by shape. |
 | Route policies | Registering a route requires `{ roles, ownership }` (public) or an access-matrix entry (internal); startup fails otherwise. |
 | Authentication | `TokenVerifier` (EdDSA, JWKS fetch with cache and pinning), `ServiceTokenSigner` and `ServiceTokenVerifier` (60 s, `aud`, unique `jti`), `AccessMatrix` loaded from `packages/shared/service-acl`, `StepUpVerifier`. |
@@ -62,6 +62,7 @@ The kit contains **no business rules**. Anything that mentions a wallet, transfe
 - AC-F10-16 (independence): The unit, integration and contract suites of each service run with only its own Postgres (plus Redis and RabbitMQ where it uses them) and contract fakes of its collaborators, in any order and in parallel with other services' suites.
 - AC-F10-17 (configuration safety): Every service's configuration schema is documented in `.env.example`, a test checks that file lists every variable the schemas read, and no secret value appears in logs, errors or `/readyz` output.
 - AC-F10-18 (replica safety): Two replicas of each service started against the same database and broker run the relay, the consumers and the scheduled jobs without duplicate effects (leases, `FOR UPDATE SKIP LOCKED`, advisory locks) and without sticky sessions.
+- AC-F10-19 (request assembly): A request whose body repeats a path or query parameter (for example `id` in the body of `POST /v1/transfers/:id/confirm`, or `user_id` in the body of a route that takes the user from the token) is rejected with 400 `VALIDATION_FAILED` and reaches no handler; an unknown extra key in the body or query is rejected the same way; both are tested in the sample service.
 
 ## Errors and security
 

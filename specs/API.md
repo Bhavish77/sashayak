@@ -66,7 +66,7 @@ Internal-only codes (`HOLD_VOIDED`, `HOLD_STATE_CONFLICT`, `SERVICE_FORBIDDEN`) 
 | `POST /v1/auth/refresh` | public | Body `{ "refresh_token" }`. Returns a new pair; the old refresh token is revoked. Reuse revokes the family. The new access token carries the current `loc` claim. |
 | `POST /v1/auth/logout` | any | Body `{ "refresh_token" }`. 204. Revokes the family. |
 | `GET /v1/me` | any | Current user profile. |
-| `PATCH /v1/me` | any | Body `{ "preferred_locale": "en" or "hi" or "hi-Latn" or null }`. Takes effect in tokens at the next refresh; the web app refreshes right after. |
+| `PATCH /v1/me` | any | Body `{ "preferred_locale": "en" or "hi" or "hi-Latn" or null }`. Takes effect in tokens at the next refresh; the web app refreshes right after. Returns 204. |
 | `PUT /v1/me/pin` | customer | Body `{ "pin", "current_pin": "required if one exists" }`. 204. |
 
 ## Conversation (owner: `assistant`)
