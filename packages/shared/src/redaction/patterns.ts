@@ -81,6 +81,31 @@ export function normalizeDigits(input: string): string {
 /** A 9-18 digit run, optionally preceded by a currency marker captured for the caller to check. */
 export const ACCOUNT_WITH_OPTIONAL_CURRENCY_PREFIX = /(₹|Rs\.?[ ]?|INR[ ]?)?\b(\d{9,18})\b/g;
 
+/**
+ * A 9-18 digit run directly named as an account by the word in front of
+ * it ("account", "a/c" or "acct", optionally followed by "number"/"no"
+ * and a colon). This must run before AADHAAR_LIKE: a 12-digit account
+ * number ("account number 123456789012") would otherwise be claimed by
+ * the bare 12-digit Aadhaar pattern first, since nothing about its shape
+ * says "account" once the trigger word is stripped away — only the
+ * context does. Shorter runs (under 9 digits) are deliberately left
+ * alone, so "account 2000" is not mistaken for an account number.
+ */
+export const ACCOUNT_BY_CONTEXT =
+  /\b(?:account|a\/c|acct)\b(?:\s*(?:number|no))?\s*:?\s*(\d{9,18})\b/gi;
+
+/**
+ * A UUID (8-4-4-4-12 hex digits) is an identifier, never personal data,
+ * and must never be altered — including when one of its groups happens
+ * to look like a sensitive number (a 12-hex-digit group is also 12
+ * decimal digits, which is exactly Aadhaar's shape). redact-text.ts
+ * extracts every UUID into a placeholder before any other pattern runs,
+ * then restores the original text afterwards, so no digit-based pattern
+ * ever sees UUID characters to match against.
+ */
+export const UUID =
+  /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g;
+
 export function isLuhnValid(digits: string): boolean {
   let sum = 0;
   let shouldDouble = false;

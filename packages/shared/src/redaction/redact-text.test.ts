@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { redactText } from './redact-text';
 
@@ -77,6 +78,28 @@ describe('redactText: bank account (F06)', () => {
   ])('does not redact "%s" (%s)', (input) => {
     const result = redactText(`value ${input} here`);
     expect(result).toContain(input);
+  });
+
+  it('tags a 12-digit account number by context as [ACCOUNT], not [AADHAAR]', () => {
+    const result = redactText('account number 123456789012');
+    expect(result).toContain('[ACCOUNT]');
+    expect(result).not.toContain('[AADHAAR]');
+    expect(result).not.toContain('123456789012');
+  });
+
+  it('does not touch a short number after "account" (too short to be an account number)', () => {
+    const result = redactText('account 2000');
+    expect(result).toBe('account 2000');
+  });
+
+  it.each([
+    ['a/c 123456789', 'a/c trigger'],
+    ['acct no 123456789', 'acct trigger with "no"'],
+    ['account: 123456789', 'account trigger with colon'],
+  ])('tags a context-triggered account number "%s" (%s)', (input) => {
+    const result = redactText(input);
+    expect(result).toContain('[ACCOUNT]');
+    expect(result).not.toContain('123456789');
   });
 });
 
@@ -231,6 +254,36 @@ describe('redactText: Devanagari and fullwidth digits (F06)', () => {
     const result = redactText('call me on ９８７６５４３２１０ today');
     expect(result).toContain('[PHONE]');
     expect(result).not.toContain('987654321');
+  });
+});
+
+describe('redactText: UUIDs are never altered (F06)', () => {
+  it.each([
+    ['550e8400-e29b-41d4-a716-446655440000', 'standard UUID'],
+    [
+      '550e8400-e29b-41d4-a716-123456789012',
+      'last group is 12 digits, which would otherwise false-match Aadhaar',
+    ],
+  ])('leaves UUID "%s" completely untouched (%s)', (uuid) => {
+    const result = redactText(`id: ${uuid} recorded`);
+    expect(result).toContain(uuid);
+    expect(result).not.toContain('[AADHAAR]');
+    expect(result).not.toContain('[ACCOUNT]');
+  });
+
+  it('redacts a phone number next to an untouched UUID', () => {
+    const result = redactText('call 9876543210 re 550e8400-e29b-41d4-a716-446655440000');
+    expect(result).toContain('[PHONE]');
+    expect(result).not.toContain('9876543210');
+    expect(result).toContain('550e8400-e29b-41d4-a716-446655440000');
+  });
+
+  it('leaves 100,000 random UUIDs completely untouched', () => {
+    for (let i = 0; i < 100_000; i++) {
+      const uuid = randomUUID();
+      const result = redactText(`trace id ${uuid} end`);
+      expect(result).toContain(uuid);
+    }
   });
 });
 
