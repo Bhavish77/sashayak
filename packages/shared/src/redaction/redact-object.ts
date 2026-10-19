@@ -19,6 +19,11 @@ const SENSITIVE_WORDS = new Set([
   'credential',
   'credentials',
   'assertion',
+  'passcode',
+  'passphrase',
+  'pwd',
+  'cvv',
+  'cvc',
 ]);
 
 /**

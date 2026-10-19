@@ -173,6 +173,11 @@ describe('redactObject: word-based sensitive key matching (F06)', () => {
     'x-api-key',
     'private_key',
     'step_up_assertion',
+    'passcode',
+    'user_passphrase',
+    'db_pwd',
+    'cvv',
+    'card_cvc',
   ])('redacts the value of a secret-shaped key "%s"', (key) => {
     const result = redactObject({ [key]: 'some-value' }) as Record<string, unknown>;
     expect(result[key]).toBe('[REDACTED]');
