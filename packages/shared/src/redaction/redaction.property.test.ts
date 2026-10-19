@@ -152,4 +152,18 @@ describe('redactObject: fuzz tests', () => {
       { numRuns: 300 },
     );
   });
+
+  it('never throws on an arbitrary object with a forced cycle, and is idempotent', () => {
+    fc.assert(
+      fc.property(fc.object(), (base) => {
+        const withCycle = base as Record<string, unknown>;
+        withCycle.self = withCycle;
+        expect(() => redactObject(withCycle)).not.toThrow();
+        const once = redactObject(withCycle);
+        expect(() => redactObject(once)).not.toThrow();
+        expect(redactObject(once)).toEqual(once);
+      }),
+      { numRuns: 200 },
+    );
+  });
 });

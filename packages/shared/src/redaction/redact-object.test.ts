@@ -46,3 +46,108 @@ describe('redactObject', () => {
     expect(() => redactObject([])).not.toThrow();
   });
 });
+
+describe('redactObject: structural edge cases (F06)', () => {
+  it('converts a Date to its ISO string', () => {
+    const date = new Date('2026-01-01T00:00:00.000Z');
+    const result = redactObject({ createdAt: date }) as Record<string, unknown>;
+    expect(result.createdAt).toBe(date.toISOString());
+  });
+
+  it('converts an Error to a redacted { name, message } object', () => {
+    const error = new Error('failed for user aarav@example.com');
+    const result = redactObject({ err: error }) as { err: { name: string; message: string } };
+    expect(result.err).toEqual({ name: 'Error', message: 'failed for user [EMAIL]' });
+  });
+
+  it('replaces a circular reference with "[Circular]" and does not throw', () => {
+    const input: Record<string, unknown> = { name: 'loop' };
+    input.self = input;
+    let result: Record<string, unknown> | undefined;
+    expect(() => {
+      result = redactObject(input) as Record<string, unknown>;
+    }).not.toThrow();
+    expect(result?.self).toBe('[Circular]');
+    expect(result?.name).toBe('loop');
+  });
+
+  it('does not flag the same object appearing twice as siblings (not a cycle) as circular', () => {
+    const shared = { label: 'shared' };
+    const input = { a: shared, b: shared };
+    const result = redactObject(input) as Record<string, unknown>;
+    expect(result.a).toEqual({ label: 'shared' });
+    expect(result.b).toEqual({ label: 'shared' });
+  });
+
+  it('truncates nesting deeper than 20 levels', () => {
+    let deep: Record<string, unknown> = { leaf: 'call 9876543210 now' };
+    for (let i = 0; i < 25; i++) {
+      deep = { child: deep };
+    }
+    const result = redactObject(deep) as Record<string, unknown>;
+    let cursor: unknown = result;
+    let hops = 0;
+    while (
+      typeof cursor === 'object' &&
+      cursor !== null &&
+      'child' in (cursor as Record<string, unknown>)
+    ) {
+      cursor = (cursor as Record<string, unknown>).child;
+      hops++;
+    }
+    expect(cursor).toBe('[Truncated]');
+    // Sanity: truncation must kick in somewhere inside the 25-level input,
+    // not immediately at the root and not only past the very last level.
+    expect(hops).toBeGreaterThan(19);
+    expect(hops).toBeLessThanOrEqual(21);
+  });
+
+  it('keeps a literal "__proto__" key as plain data, not a prototype mutation', () => {
+    const input = JSON.parse('{"a":1,"__proto__":{"x":"1"}}') as Record<string, unknown>;
+    const result = redactObject(input) as Record<string, unknown>;
+    const descriptor = Object.getOwnPropertyDescriptor(result, '__proto__');
+    expect(descriptor?.value).toEqual({ x: '1' });
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(result.a).toBe(1);
+  });
+});
+
+describe('redactObject: word-based sensitive key matching (F06)', () => {
+  it.each([
+    'password',
+    'password_hash',
+    'pin',
+    'new_pin',
+    'pin_hash',
+    'token',
+    'access_token',
+    'refreshToken',
+    'x-service-token',
+    'secret',
+    'client_secret',
+    'otp',
+    'Authorization',
+    'Cookie',
+    'Set-Cookie',
+    'api_key',
+    'apiKey',
+    'x-api-key',
+    'private_key',
+    'step_up_assertion',
+  ])('redacts the value of a secret-shaped key "%s"', (key) => {
+    const result = redactObject({ [key]: 'some-value' }) as Record<string, unknown>;
+    expect(result[key]).toBe('[REDACTED]');
+  });
+
+  it.each([
+    'shipping_address_label',
+    'monkey',
+    'idempotency_key',
+    'snapshot_hash',
+    'request_id',
+    'mapping',
+  ])('does not redact a non-secret-shaped key "%s"', (key) => {
+    const result = redactObject({ [key]: 'some-value' }) as Record<string, unknown>;
+    expect(result[key]).toBe('some-value');
+  });
+});
