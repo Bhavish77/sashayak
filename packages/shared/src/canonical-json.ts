@@ -14,15 +14,27 @@ function sortKeysDeep(value: unknown): unknown {
   if (value instanceof Date) {
     return value.toISOString();
   }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `Canonical JSON cannot represent a non-finite number (${value}); JSON.stringify would silently turn it into "null"`,
+      );
+    }
+    return value;
+  }
   if (Array.isArray(value)) {
     return value.map(sortKeysDeep);
   }
   if (value !== null && typeof value === 'object') {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value).sort()) {
-      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-    }
-    return sorted;
+    // Object.fromEntries creates genuine own data properties, including one
+    // literally named "__proto__" — unlike `sorted[key] = ...`, which
+    // treats that one key as a prototype setter instead of data and
+    // silently drops it (a plain object has no own "__proto__" property
+    // to iterate afterwards).
+    const sortedEntries = Object.keys(value)
+      .sort()
+      .map((key) => [key, sortKeysDeep((value as Record<string, unknown>)[key])] as const);
+    return Object.fromEntries(sortedEntries);
   }
   return value;
 }
