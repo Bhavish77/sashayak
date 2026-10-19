@@ -59,9 +59,13 @@ export function redactText(input: string): string {
   // run that would otherwise also match the bare Aadhaar-like pattern.
   result = result.replace(PHONE, '[PHONE]');
   result = result.replace(AADHAAR_LIKE, '[AADHAAR]');
+  // A grouped candidate that fails Luhn is not a card, but it must not
+  // stay visible either: ungroup it into a plain digit run so the account
+  // fallback below can still claim it, the same way a bare Luhn-invalid
+  // run already does — a mistyped card number must not escape redaction.
   result = result.replace(CARD_CANDIDATE, (match) => {
     const digitsOnly = match.replace(/[ -]/g, '');
-    return isLuhnValid(digitsOnly) ? '[CARD]' : match;
+    return isLuhnValid(digitsOnly) ? '[CARD]' : digitsOnly;
   });
   result = result.replace(ACCOUNT_WITH_OPTIONAL_CURRENCY_PREFIX, (full, currencyMarker) =>
     currencyMarker ? full : '[ACCOUNT]',

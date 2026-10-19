@@ -42,13 +42,15 @@ export const PHONE = new RegExp(
 );
 
 /**
- * 13-19 digits (candidate card numbers), bare or grouped in four-digit
- * blocks separated by a single space or dash — the backreference `\1`
- * requires the same separator throughout, so a mixed sequence never
+ * 13-19 digits (candidate card numbers), bare or grouped — 4-4-4-4 (most
+ * cards) or 4-6-5 (American Express), separated by a single space or
+ * dash throughout; each alternative's own backreference requires the
+ * same separator for every group in it, so a mixed sequence never
  * matches. Luhn validity is checked separately, not by this regex alone;
  * the caller strips any separators before running that check.
  */
-export const CARD_CANDIDATE = /\b\d{4}([ -])\d{4}\1\d{4}\1\d{4}\b|\b\d{13,19}\b/g;
+export const CARD_CANDIDATE =
+  /\b\d{4}([ -])\d{4}\1\d{4}\1\d{4}\b|\b\d{4}([ -])\d{6}\2\d{5}\b|\b\d{13,19}\b/g;
 
 const DEVANAGARI_DIGIT_ZERO = 0x0966;
 const FULLWIDTH_DIGIT_ZERO = 0xff10;

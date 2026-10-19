@@ -155,14 +155,22 @@ describe('redactText: card numbers with Luhn check (F06)', () => {
     expect(result).not.toContain('1111');
   });
 
-  it('a grouped 16-digit Luhn-invalid number is not partially redacted (no leftover visible digits)', () => {
+  it('treats a grouped 16-digit Luhn-invalid number like a plain digit run, tagging it [ACCOUNT] rather than leaving it visible', () => {
     // Same test number as above with the last digit broken, still grouped.
     const input = '4111 1111 1111 1112';
     const result = redactText(`card ${input} on file`);
     expect(result).not.toContain('[CARD]');
     expect(result).not.toContain('[AADHAAR]');
-    expect(result).not.toContain('[ACCOUNT]');
-    expect(result).toContain(input);
+    expect(result).toContain('[ACCOUNT]');
+    expect(result).not.toContain(input);
+    expect(result).not.toContain('1111');
+  });
+
+  it('redacts an Amex-style 4-6-5 grouped card number (Luhn-valid)', () => {
+    const result = redactText('card 3782 822463 10005 on file');
+    expect(result).toContain('[CARD]');
+    expect(result).not.toContain('822463');
+    expect(result).not.toContain('10005');
   });
 });
 
@@ -288,13 +296,24 @@ describe('redactText: UUIDs are never altered (F06)', () => {
 });
 
 describe('redactText: grouped-number negative cases survive untouched (F06)', () => {
-  it.each([['₹98,765'], ['₹1,23,456'], ['Rs 500 to 600'], ['19-10-2026'], ['send 2000 3000']])(
-    'leaves "%s" completely unchanged',
-    (input) => {
-      const result = redactText(`note: ${input} end`);
-      expect(result).toContain(input);
-    },
-  );
+  it.each([
+    ['₹98,765'],
+    ['₹1,23,456'],
+    ['Rs 500 to 600'],
+    ['19-10-2026'],
+    ['send 2000 3000'],
+    ['2026-10-19 10:15:30'],
+  ])('leaves "%s" completely unchanged', (input) => {
+    const result = redactText(`note: ${input} end`);
+    expect(result).toContain(input);
+  });
+
+  it('leaves short trailing digit groups next to a redacted phone number untouched', () => {
+    const result = redactText('call 9876543210 re 12 34 56');
+    expect(result).toContain('[PHONE]');
+    expect(result).not.toContain('9876543210');
+    expect(result).toContain('12 34 56');
+  });
 });
 
 describe('redactText: idempotence and robustness', () => {
