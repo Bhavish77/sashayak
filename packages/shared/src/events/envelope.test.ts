@@ -51,4 +51,20 @@ describe('eventEnvelopeSchema', () => {
     const value = validEnvelope();
     expect(() => schema.parse({ ...value, subject: { ...value.subject, extra: 1 } })).toThrow();
   });
+
+  it('rejects occurred_at without exactly three fractional digits', () => {
+    expect(() =>
+      schema.parse({ ...validEnvelope(), occurred_at: '2026-10-15T10:00:00Z' }),
+    ).toThrow();
+  });
+
+  it.each([
+    ['uppercase hex required', '00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01'],
+    ['wrong trace-id length', '00-4bf92f3577b34da6a3ce929d0e0e473-00f067aa0ba902b7-01'],
+    ['wrong span-id length', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b-01'],
+    ['other version prefix', '01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'],
+    ['empty string', ''],
+  ])('rejects traceparent: %s', (_description, traceparent) => {
+    expect(() => schema.parse({ ...validEnvelope(), traceparent })).toThrow();
+  });
 });

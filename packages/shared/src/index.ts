@@ -11,6 +11,7 @@ export * from './cards';
 export * from './interpretation';
 export * from './lexicon';
 export * from './canonical-json';
+export * from './timestamp';
 export * from './transfer-object';
 export * from './service-acl';
 export * from './events/envelope';

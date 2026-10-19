@@ -92,6 +92,16 @@ describe('auditRecordedV1EventSchema', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects a payload occurred_at without exactly three fractional digits', () => {
+    const value = validAuditRecordedEnvelope();
+    expect(() =>
+      auditRecordedV1EventSchema.parse({
+        ...value,
+        payload: { ...value.payload, occurred_at: '2026-10-15T10:00:00Z' },
+      }),
+    ).toThrow();
+  });
 });
 
 describe('transferStatusChangedV1EventSchema', () => {

@@ -6,12 +6,13 @@ import {
   transferStatusSchema,
 } from '../enums';
 import { conversationIdSchema, transferIdSchema, userIdSchema } from '../ids';
+import { isoTimestampSchema } from '../timestamp';
 import { eventEnvelopeSchema } from './envelope';
 
 /** EVENTS.md catalog: `audit.recorded` v1. */
 export const auditRecordedV1PayloadSchema = z
   .object({
-    occurred_at: z.string().datetime(),
+    occurred_at: isoTimestampSchema,
     actor_id: z.string().min(1).nullable(),
     actor_role: z.string().min(1).nullable(),
     action: auditActionSchema,
