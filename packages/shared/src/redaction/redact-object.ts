@@ -58,9 +58,19 @@ function isSensitiveKey(key: string): boolean {
  * — an object reachable from itself — is told apart from the same
  * object merely appearing twice as unrelated siblings, which is not a
  * cycle and must still be redacted normally both times.
+ *
+ * The whole walk is wrapped so redaction can never throw: this is a
+ * fail-closed guarantee (CLAUDE.md — never log message text, PINs,
+ * tokens or secrets), so something unexpected (a property getter that
+ * throws) must produce a token that says redaction failed, never the
+ * original, un-redacted value.
  */
 export function redactObject(value: unknown): unknown {
-  return redactValue(value, new Set(), 0);
+  try {
+    return redactValue(value, new Set(), 0);
+  } catch {
+    return '[REDACTION_FAILED]';
+  }
 }
 
 function redactValue(value: unknown, ancestors: Set<object>, depth: number): unknown {
@@ -68,7 +78,7 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): unk
     return redactText(value);
   }
   if (value instanceof Date) {
-    return value.toISOString();
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
   }
   if (value instanceof Error) {
     return { name: value.name, message: redactText(value.message) };

@@ -166,4 +166,29 @@ describe('redactObject: fuzz tests', () => {
       { numRuns: 200 },
     );
   });
+
+  it('never throws on arbitrary nested input containing invalid dates and throwing-getter objects', () => {
+    const makeThrowingGetterObject = (): Record<string, unknown> => {
+      const poisoned: Record<string, unknown> = {};
+      Object.defineProperty(poisoned, 'poison', {
+        enumerable: true,
+        get() {
+          throw new Error('boom');
+        },
+      });
+      return poisoned;
+    };
+    const poisonArbitrary = fc
+      .constantFrom('invalid-date', 'throwing-getter')
+      .map((kind) =>
+        kind === 'invalid-date' ? new Date('not-a-real-date') : makeThrowingGetterObject(),
+      );
+
+    fc.assert(
+      fc.property(fc.object({ values: [poisonArbitrary], maxDepth: 3 }), (input) => {
+        expect(() => redactObject(input)).not.toThrow();
+      }),
+      { numRuns: 200 },
+    );
+  });
 });

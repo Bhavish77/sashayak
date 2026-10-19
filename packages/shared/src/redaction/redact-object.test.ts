@@ -54,6 +54,14 @@ describe('redactObject: structural edge cases (F06)', () => {
     expect(result.createdAt).toBe(date.toISOString());
   });
 
+  it('converts an invalid Date to null', () => {
+    const result = redactObject({ createdAt: new Date('not-a-real-date') }) as Record<
+      string,
+      unknown
+    >;
+    expect(result.createdAt).toBeNull();
+  });
+
   it('converts an Error to a redacted { name, message } object', () => {
     const error = new Error('failed for user aarav@example.com');
     const result = redactObject({ err: error }) as { err: { name: string; message: string } };
@@ -69,6 +77,37 @@ describe('redactObject: structural edge cases (F06)', () => {
     }).not.toThrow();
     expect(result?.self).toBe('[Circular]');
     expect(result?.name).toBe('loop');
+  });
+
+  it('fails closed to the string "[REDACTION_FAILED]" when a property getter throws, never returning the original value', () => {
+    const poisoned: Record<string, unknown> = { safe: 'ok' };
+    Object.defineProperty(poisoned, 'bad', {
+      enumerable: true,
+      get() {
+        throw new Error('boom');
+      },
+    });
+    let result: unknown;
+    expect(() => {
+      result = redactObject(poisoned);
+    }).not.toThrow();
+    expect(result).toBe('[REDACTION_FAILED]');
+  });
+
+  it('fails closed when a throwing getter is nested inside an array inside an object', () => {
+    const poisoned: Record<string, unknown> = {};
+    Object.defineProperty(poisoned, 'bad', {
+      enumerable: true,
+      get() {
+        throw new Error('boom');
+      },
+    });
+    const input = { items: [1, 2, poisoned] };
+    let result: unknown;
+    expect(() => {
+      result = redactObject(input);
+    }).not.toThrow();
+    expect(result).toBe('[REDACTION_FAILED]');
   });
 
   it('does not flag the same object appearing twice as siblings (not a cycle) as circular', () => {
