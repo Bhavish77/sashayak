@@ -42,7 +42,7 @@ Columns are in `DATA_MODEL.md` (database `audit_db`). Rules:
 
 - `details` is a small JSON object passed through the redaction serializer **by the producer before it enters its outbox**, and again by `audit` on receipt (defence in depth).
 - Canonical JSON: keys sorted, no whitespace, timestamps as ISO-8601 UTC with milliseconds, numbers as integers where possible. Timestamps are always strings of the form `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC, exactly three fractional digits), and the shared timestamp schema rejects every other form, so the writer and the verifier can never hash two spellings of the same instant. `NaN` and `Infinity` are errors, not `null`. Every key, including one named `__proto__`, is data and is hashed. One canonicalization function in `packages/shared`, used by the writer and the verifier, with test vectors committed to the repository.
-- `hash = sha256(prev_hash || canonical_json(entry without hash and prev_hash))`; the first row's `prev_hash` is 64 zeros. The entry includes `source_event_id`, `source_service`, `occurred_at` and `recorded_at` (the time of ingestion), so ordering metadata is part of the evidence.
+- `hash = sha256(prev_hash || canonical_json(entry without hash and prev_hash))`; the first row's `prev_hash` is 64 zeros. The entry includes `source_event_id`, `source_service`, `occurred_at` and `recorded_at` (the time of ingestion), so ordering metadata is part of the evidence. `recorded_at` is created by the writer in application code at millisecond precision (never the database default `now()`, which keeps microseconds), is hashed as the exact `YYYY-MM-DDTHH:mm:ss.sssZ` string and is stored from that same value, so the verifier recomputes the same hash from the row it reads back.
 - The advisory lock gives the chain one order. Throughput target for the demo is at least 200 ingested events per second on the reference machine; if a profile shows contention, the documented scaling path is a per-day chain with a daily anchor row.
 
 ## Permissions
@@ -83,6 +83,7 @@ Filter by actor, action, producer, resource, time; shows the chain status for th
 - AC-F07-14: With `audit` stopped for the duration of 50 business actions across the services and then restarted, all 50 entries appear, none is duplicated, and `audit_lag_seconds` returns below the alert threshold; the chain verifies.
 - AC-F07-15: The completeness check reports zero difference after a normal run and after the fault scenarios of F05 AC-F05-39, and reports the missing producer and count when an outbox row of an `audit.recorded` event is removed by a privileged connection before delivery.
 - AC-F07-16: `occurred_at` is preserved: for events delivered out of order, the stored `occurred_at` equals the producer's value, `recorded_at` reflects arrival, and the viewer can sort by either.
+- AC-F07-17: After a round trip through Postgres, recomputing the hash from the stored columns equals the stored hash for every row; `recorded_at` comes from application code at millisecond precision, and a row inserted with a database-generated `recorded_at` is rejected by a test that would otherwise produce a false tamper alarm.
 
 ## Errors and security
 
