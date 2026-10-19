@@ -27,7 +27,13 @@ export function loadConfig<Schema extends z.ZodTypeAny>(
 ): z.infer<Schema> {
   const result = schema.safeParse(env);
   if (!result.success) {
-    const variableNames = [...new Set(result.error.issues.map((issue) => String(issue.path[0])))];
+    const variableNames = [
+      ...new Set(
+        result.error.issues.map((issue) =>
+          issue.path.length === 0 ? '(configuration)' : String(issue.path[0]),
+        ),
+      ),
+    ];
     throw new ConfigError(variableNames);
   }
   return result.data as z.infer<Schema>;

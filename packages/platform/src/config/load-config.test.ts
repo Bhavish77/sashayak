@@ -60,6 +60,20 @@ describe('loadConfig', () => {
   it('never throws for a reason other than a ConfigError', () => {
     expect(() => loadConfig(baseConfigSchema, {})).not.toThrow();
   });
+
+  it('reports a root-level issue (empty path) as "(configuration)", not "undefined"', () => {
+    const schema = z
+      .object({ A: z.string(), B: z.string() })
+      .refine((value) => value.A !== value.B, { message: 'A and B must differ' });
+    let error: unknown;
+    try {
+      loadConfig(schema, { A: 'same', B: 'same' });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(ConfigError);
+    expect((error as ConfigError).variableNames).toEqual(['(configuration)']);
+  });
 });
 
 describe('loadConfigOrExit', () => {
