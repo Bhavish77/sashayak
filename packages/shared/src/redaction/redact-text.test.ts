@@ -30,6 +30,18 @@ describe('redactText: phone (F06)', () => {
     const result = redactText(`number is ${input} here`);
     expect(result).not.toContain('[PHONE]');
   });
+
+  it.each([
+    ['98765 43210', '5+5 space-grouped'],
+    ['987-654-3210', '3+3+4 dash-grouped'],
+    ['+91 98765-43210', '+91 prefix, 5+5 dash-grouped'],
+    ['+91 98765 43210', '+91 prefix, 5+5 space-grouped'],
+  ])('redacts a grouped phone number "%s" (%s)', (input) => {
+    const result = redactText(`call me on ${input} today`);
+    expect(result).toContain('[PHONE]');
+    expect(result).not.toContain('98765');
+    expect(result).not.toContain('43210');
+  });
 });
 
 describe('redactText: email (F06)', () => {
@@ -110,6 +122,25 @@ describe('redactText: card numbers with Luhn check (F06)', () => {
     const result = redactText(`value ${input} here`);
     expect(result).toContain(input);
   });
+
+  it.each([
+    ['4111 1111 1111 1111', 'space-grouped'],
+    ['4111-1111-1111-1111', 'dash-grouped'],
+  ])('redacts a Luhn-valid grouped card number "%s" (%s)', (input) => {
+    const result = redactText(`card ${input} on file`);
+    expect(result).toContain('[CARD]');
+    expect(result).not.toContain('1111');
+  });
+
+  it('a grouped 16-digit Luhn-invalid number is not partially redacted (no leftover visible digits)', () => {
+    // Same test number as above with the last digit broken, still grouped.
+    const input = '4111 1111 1111 1112';
+    const result = redactText(`card ${input} on file`);
+    expect(result).not.toContain('[CARD]');
+    expect(result).not.toContain('[AADHAAR]');
+    expect(result).not.toContain('[ACCOUNT]');
+    expect(result).toContain(input);
+  });
 });
 
 describe('redactText: PAN-like (F06)', () => {
@@ -183,6 +214,16 @@ describe('redactText: UPI-like handles (F06)', () => {
     expect(result).toContain('[EMAIL]');
     expect(result).not.toContain('[UPI]');
   });
+});
+
+describe('redactText: grouped-number negative cases survive untouched (F06)', () => {
+  it.each([['₹98,765'], ['₹1,23,456'], ['Rs 500 to 600'], ['19-10-2026'], ['send 2000 3000']])(
+    'leaves "%s" completely unchanged',
+    (input) => {
+      const result = redactText(`note: ${input} end`);
+      expect(result).toContain(input);
+    },
+  );
 });
 
 describe('redactText: idempotence and robustness', () => {

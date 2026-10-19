@@ -14,22 +14,41 @@ export const EMAIL = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g;
 
 export const UPI_LIKE = /\b[\w.-]+@[A-Za-z][\w-]*\b/g;
 
-/** 12 digits, bare or grouped 4-4-4 with a single space between groups. */
-export const AADHAAR_LIKE = /\b\d{4}[ ]\d{4}[ ]\d{4}\b|\b\d{12}\b/g;
+/**
+ * 12 digits, bare or grouped 4-4-4 with a single space between groups.
+ * The grouped branch is guarded on both sides against being a 3-group
+ * slice of a longer 4-group run (a 16-digit grouped card number): without
+ * the lookbehind/lookahead, the first or last three groups of a card
+ * number would match here first and leave the remaining group exposed
+ * as plain text instead of the whole number being evaluated as a card.
+ */
+export const AADHAAR_LIKE = /(?<!\d[ -])\b\d{4}[ ]\d{4}[ ]\d{4}\b(?![ -]\d)|\b\d{12}\b/g;
 
 /**
  * Indian mobile: optional +91 or a leading 0 (with an optional separating
- * space/dash), then 10 digits starting 6-9. Three branches, not one
- * optional-prefix group, because `\b` cannot sit between two digits (the
- * prefix's last digit and the number's first digit are both word
- * characters, so there is no boundary there); a negative lookbehind
- * stands in for `\b` wherever a bare digit run must not itself be part of
- * a longer one.
+ * space/dash), then a 10-digit number starting 6-9 — written bare, or
+ * grouped 5+5 or 3+3+4 with a single space or dash between groups (a
+ * phone number copied from a contact card is rarely typed as ten bare
+ * digits). Three top-level branches, not one optional-prefix group,
+ * because `\b` cannot sit between two digits (the prefix's last digit
+ * and the number's first digit are both word characters, so there is no
+ * boundary there); a negative lookbehind stands in for `\b` wherever a
+ * bare digit run must not itself be part of a longer one.
  */
-export const PHONE = /\+91[ -]?[6-9]\d{9}\b|(?<!\d)0[ -]?[6-9]\d{9}\b|(?<!\d)[6-9]\d{9}\b/g;
+const PHONE_CORE = String.raw`(?:[6-9]\d{9}|[6-9]\d{4}[ -]\d{5}|[6-9]\d{2}[ -]\d{3}[ -]\d{4})`;
+export const PHONE = new RegExp(
+  String.raw`\+91[ -]?${PHONE_CORE}\b|(?<!\d)0[ -]?${PHONE_CORE}\b|(?<!\d)${PHONE_CORE}\b`,
+  'g',
+);
 
-/** 13-19 digits (candidate card numbers); Luhn validity is checked separately, not by this regex alone. */
-export const CARD_CANDIDATE = /\b\d{13,19}\b/g;
+/**
+ * 13-19 digits (candidate card numbers), bare or grouped in four-digit
+ * blocks separated by a single space or dash — the backreference `\1`
+ * requires the same separator throughout, so a mixed sequence never
+ * matches. Luhn validity is checked separately, not by this regex alone;
+ * the caller strips any separators before running that check.
+ */
+export const CARD_CANDIDATE = /\b\d{4}([ -])\d{4}\1\d{4}\1\d{4}\b|\b\d{13,19}\b/g;
 
 /** A 9-18 digit run, optionally preceded by a currency marker captured for the caller to check. */
 export const ACCOUNT_WITH_OPTIONAL_CURRENCY_PREFIX = /(₹|Rs\.?[ ]?|INR[ ]?)?\b(\d{9,18})\b/g;

@@ -31,7 +31,10 @@ export function redactText(input: string): string {
   // run that would otherwise also match the bare Aadhaar-like pattern.
   result = result.replace(PHONE, '[PHONE]');
   result = result.replace(AADHAAR_LIKE, '[AADHAAR]');
-  result = result.replace(CARD_CANDIDATE, (match) => (isLuhnValid(match) ? '[CARD]' : match));
+  result = result.replace(CARD_CANDIDATE, (match) => {
+    const digitsOnly = match.replace(/[ -]/g, '');
+    return isLuhnValid(digitsOnly) ? '[CARD]' : match;
+  });
   result = result.replace(ACCOUNT_WITH_OPTIONAL_CURRENCY_PREFIX, (full, currencyMarker) =>
     currencyMarker ? full : '[ACCOUNT]',
   );
