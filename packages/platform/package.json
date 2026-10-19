@@ -8,5 +8,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --root ../.. packages/platform"
+  },
+  "dependencies": {
+    "@sahayak/shared": "workspace:*",
+    "pino": "^9.5.0",
+    "zod": "^3.24.1"
   }
 }
